@@ -18,7 +18,11 @@ use tokio::net::{
 };
 
 use music_snobster::organizer::get_collection;
-use music_snobster::codec::MessageEvent;
+use music_snobster::codec::{
+    MessageEvent,
+    MessageCodec,
+    MessageCodecError,
+};
 
 type Tx = mpsc::UnboundedSender<String>;
 type Rx = mpsc::UnboundedReceiver<String>;
@@ -31,6 +35,9 @@ impl Shared {
     fn new() -> Self {
         Shared { peers: HashMap::new() }
     }
+}
+
+impl Shared {
     async fn broadcast(&mut self, sender: SocketAddr, message: &str) {
         for peer in self.peers.iter_mut() {
             if *peer.0 != sender {
@@ -41,36 +48,33 @@ impl Shared {
 }
 
 struct Peer {
-    lines: Framed<TcpStream, LinesCodec>,
+    messages: Framed<TcpStream, MessageCodec>,
     rx: Rx,
 }
 
 impl Peer {
     async fn new(
         state: Arc<Mutex<Shared>>,
-        lines: Framed<TcpStream, LinesCodec>,
+        messages: Framed<TcpStream, MessageCodec>,
     ) -> io::Result<Peer> {
-        let addr = lines.get_ref().peer_addr()?;
+        let addr = messages.get_ref().peer_addr()?;
         let (tx, rx) = mpsc::unbounded_channel();
-
         state.lock().await.peers.insert(addr, tx);
-        Ok(Peer { lines, rx })
+        Ok( Peer { messages, rx })
     }
 }
 
 impl Stream for Peer {
-    type Item = Result<MessageEvent, LinesCodecError>;
+    type Item = Result<MessageEvent, MessageCodecError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Poll::Ready(Some(v)) = Pin::new(&mut self.rx).poll_next(cx) {
             return Poll::Ready(Some(Ok(MessageEvent::Received(v))));
         }
 
-        let result: Option<_> = futures::ready!(Pin::new(&mut self.lines).poll_next(cx));
-
-        // publish to all peers
+        let result: Option<_> = futures::ready!(Pin::new(&mut self.messages).poll_next(cx));
         Poll::Ready(match result {
-            Some(Ok(message)) => Some(Ok(MessageEvent::Broadcast(message))),
+            Some(Ok(message)) => Some(Ok(message)),
             Some(Err(e)) => Some(Err(e)),
             None => None,
         })
@@ -86,31 +90,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let (stream, addr) = listener.accept().await?;
         let state = Arc::clone(&state);
-        // let db = db.clone();
+
         tokio::spawn(async move {
-            // let (reader, mut writer) = stream.split();
-            let mut buf = bytes::BytesMut::with_capacity(10);
-
-            let mut file = tokio::fs::File::open("/Users/user2/Documents/music/Jeromes Dream/Completed 1997-2001/12 How Staggering Is This Realization.mp3").await.unwrap();
-            let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
-            file.read_buf(&mut buf).await.unwrap();
-            transport.send(buf.clone().freeze()).await.unwrap();
-            println!("The bytes: {:?}", &buf[..]);
-            buf.clear();
-
-            use std::io::SeekFrom;
-            file.seek(SeekFrom::Start(1)).await;
-
-            file.read_buf(&mut buf).await.unwrap();
-            transport.send(buf.clone().freeze()).await.unwrap();
-            println!("The bytes: {:?}", &buf[..]);
+            // let mut file = tokio::fs::File::open("/Users/user2/Documents/music/Jeromes Dream/Completed 1997-2001/12 How Staggering Is This Realization.mp3").await.unwrap();
+            // file.read_buf(&mut buf).await.unwrap();
+            // use std::io::SeekFrom;
+            // file.seek(SeekFrom::Start(1)).await;
             // tokio::io::copy(&mut file_buf, &mut writer).await;
             // writer.write(b"end").await;
 
-
-            // if let Err(e) = process(state, stream, addr).await {
-            //     println!("an error occured; error = {:?}", e);
-            // }
+            if let Err(e) = process(state, stream, addr).await {
+                println!("an error occured; error = {:?}", e);
+            }
         });
     }
 }
@@ -120,57 +111,46 @@ async fn process(
     stream: TcpStream,
     addr: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
-    let mut lines = Framed::new(stream, LinesCodec::new());
-    lines
-        .send(String::from("Please enter your username:"))
-        .await?;
+    let mut transport = Framed::new(stream, MessageCodec::new());
+    let mut peer = Peer::new(state.clone(), transport).await?;
 
-    let username = match lines.next().await {
-        Some(Ok(line)) => line,
-        _ => {
-            println!("Failed to get username from {}. Client disconnected.", addr);
-            return Ok(());
-        }
-    };
-
-    let mut peer = Peer::new(state.clone(), lines).await?;
     {
         let mut state = state.lock().await;
-        let msg = format!("{} has joined the chat", username);
-        println!("{} {}", msg, addr);
+        let msg = "broadcast test0";
         state.broadcast(addr, &msg).await;
     }
 
     while let Some(result) = peer.next().await {
+        println!("result: {:?}", result);
         match result {
             Ok(MessageEvent::Broadcast(msg)) => {
                 let mut state = state.lock().await;
-                let msg = format!("{}: {}", username, msg);
+                let msg = "broadcast test1";
 
                 state.broadcast(addr, &msg).await;
-            }
+            },
+            Ok(MessageEvent::Payload(msg)) => {
+                let mut state = state.lock().await;
+                let msg = "broadcast test2";
+
+                state.broadcast(addr, &msg).await;
+            },
             Ok(MessageEvent::Received(msg)) => {
-                peer.lines.send(msg).await?;
+                peer.messages.send(MessageEvent::Payload(msg)).await.unwrap();
             },
             Err(e) => {
                 println!(
-                    "an error occured while processing messages for {}; error = {:?}",
-                    username, e
+                    "an error occured while processing messages; error = {:?}", e
                 );
             },
-            _ => println!("unknown"),
+            _ => println!("UNK"),
         }
     }
     {
         let mut state = state.lock().await;
         state.peers.remove(&addr);
-
-        let msg = format!("{} has left the chat", username);
-        println!("{}", msg);
+        let msg = "broadcast test3";
         state.broadcast(addr, &msg).await;
     }
     Ok(())
 }
-
-// format!("{:?}", get_collection("/Users/user2/Documents/music", false, filter)).as_bytes()
-// socket.write_all("pong".as_bytes()).await;
