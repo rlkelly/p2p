@@ -109,7 +109,7 @@ fn get_string(src: &mut BytesMut) -> String {
 }
 
 fn get_nstring(src: &mut BytesMut, n: usize) -> Option<String> {
-    let target = src.split_off(n);
+    let target = src.split_to(n);
     if target.len() == 0 {
         return None;
     }
@@ -217,8 +217,33 @@ impl Encoder for MessageCodec {
                         buf.put_u64(0);
                     }
                 }
+            },
+            MessageEvent::AlbumRequest(album) => {
+                buf.put_u8(ALBUM_REQUEST);
+                if let Some(artist) = album.artist {
+                    buf.put_u64(artist.len() as u64);
+                    buf.put(artist.as_bytes());
+                } else {
+                    buf.put_u64(0);
+                }
 
-            }
+                if let Some(album) = album.album {
+                    buf.put_u64(album.len() as u64);
+                    buf.put(album.as_bytes());
+                } else {
+                    buf.put_u64(0);
+                }
+            },
+            MessageEvent::AlbumResponse(tracks) => {
+                buf.put_u8(ALBUM_RESPONSE);
+                buf.put_u64(tracks.len() as u64);
+                for track in tracks {
+                    buf.put_u64(track.track.len() as u64);
+                    buf.put(track.track.as_bytes());
+                    buf.put_u32(track.bitrate);
+                    buf.put_u32(track.length);
+                }
+            },
             _ => println!("UNKNOWN!!!"),
         }
         Ok(())
@@ -261,29 +286,33 @@ impl Decoder for MessageCodec {
             }
 
             let mut byte = src.split_to(1)[0];
-            let data_len = take_u64(src).unwrap() as usize;
 
-            if src.len() != data_len {
-                println!("{:?} {:?}", src.len(), data_len);
-                return Err(Self::Error::DataLengthMismatch);
-            }
-
-            let data = src.split_to(data_len);
+            // let data_len = take_u64(src).unwrap() as usize;
+            // if src.len() != data_len {
+            //     println!("{:?} {:?}", src.len(), data_len);
+            //     return Err(Self::Error::DataLengthMismatch);
+            // }
+            // // drop trailing bytes
+            // src.split_off(data_len);
 
             match byte {
                 PING => {
+                    let data_len = take_u64(src).unwrap() as usize;
                     let ip = bytes_to_ip_addr(src);
                     return Ok(Some(MessageEvent::Ping(ip)));
                 },
                 PONG => {
+                    let data_len = take_u64(src).unwrap() as usize;
                     let ip = bytes_to_ip_addr(src);
                     return Ok(Some(MessageEvent::Pong(ip)));
                 },
                 PAYLOAD => {
+                    let data_len = take_u64(src).unwrap() as usize;
                     let message = get_string(src);
                     return Ok(Some(MessageEvent::Payload(message)));
                 },
                 RECEIVED => {
+                    let data_len = take_u64(src).unwrap() as usize;
                     let message = get_string(src);
                     return Ok(Some(MessageEvent::Received(message)));
                 },
@@ -329,6 +358,19 @@ impl Decoder for MessageCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_serialize_artist_request() {
+        let artist_request = MessageEvent::AlbumRequest(ArtistData::new(
+            Some(String::from("test1")),
+            Some(String::from("test2")),
+        ));
+        let mut res = BytesMut::new();
+        // u8 would be big enough
+        MessageCodec{}.encode(
+                artist_request.clone(), &mut res).unwrap();
+        assert_eq!(MessageCodec{}.decode(&mut res).unwrap().unwrap(), artist_request);
+    }
 
     #[test]
     fn test_serialize_ip() {
