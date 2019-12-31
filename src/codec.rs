@@ -14,8 +14,41 @@ use serde::{Deserialize, Serialize};
 
 use crate::consts::{
     PING, PONG, PAYLOAD, RECEIVED, REQUEST_FILE,
+    ARTISTS_REQUEST, ALBUM_REQUEST,
+    ARTISTS_RESPONSE, ALBUM_RESPONSE,
 };
 
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct ArtistData {
+    artist: Option<String>,
+    album: Option<String>,
+}
+
+impl ArtistData {
+    pub fn new(artist: Option<String>, album: Option<String>) -> ArtistData {
+        ArtistData {
+            artist,
+            album,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct TrackData {
+    track: String,
+    bitrate: u32,
+    length: u32,
+}
+
+impl TrackData {
+    pub fn new(track: String, bitrate: u32, length: u32) -> TrackData {
+        TrackData {
+            track,
+            bitrate,
+            length,
+        }
+    }
+}
 
 const LENGTH_FIELD_LEN: usize = 4;
 
@@ -26,34 +59,34 @@ pub enum MessageEvent {
     Payload(String),
     Broadcast(String),
     Received(String),
-    RequestFile(String),
-    // AddrVec(Vec<SocketAddr>),
-    // ArtistRequest(String),
-    // AlbumRequest(String),
-    // ArtistResponse(String),
-    // AlbumResponse(String),
-    // PeersRequest(String),
-    // PeersResponse(String),
+    RequestFile(ArtistData),
+    ArtistsRequest,
+    ArtistsResponse(Vec<ArtistData>),
+    AlbumRequest(ArtistData),
+    AlbumResponse(Vec<TrackData>),
     Ok,
+    // PeersRequest,
+    // PeersResponse(Vec<SocketAddr>),
+    Err(MessageCodecError),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum MessageCodecError {
     SerializationError,
     DataLengthMismatch,
-    IO(std::io::Error),
+    IO,
 }
 
 impl From<std::io::Error> for MessageCodecError {
   fn from(err: std::io::Error) -> MessageCodecError {
-    MessageCodecError::IO(err)
+    MessageCodecError::IO
   }
 }
 
 impl PartialEq for MessageCodecError {
   fn eq(&self, other: &Self) -> bool {
     match (&self, &other) {
-      (MessageCodecError::IO(a), MessageCodecError::IO(b)) => a.kind() == b.kind(),
+      (MessageCodecError::IO, MessageCodecError::IO) => true,
       _ => false
     }
   }
@@ -73,6 +106,30 @@ fn bytes_to_ip_addr(src: &mut BytesMut) -> SocketAddr {
 
 fn get_string(src: &mut BytesMut) -> String {
     String::from_utf8_lossy(src).trim_matches(char::from(0)).to_string()
+}
+
+fn get_nstring(src: &mut BytesMut, n: usize) -> Option<String> {
+    let target = src.split_off(n);
+    if target.len() == 0 {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&target).trim_matches(char::from(0)).to_string())
+}
+
+fn take_u64(src: &mut BytesMut) -> Result<u64, MessageCodecError> {
+    if src.len() < 8 {
+        return Err(MessageCodecError::SerializationError)
+    }
+    let mut buf: &[u8] = &src.split_to(8)[..];
+    Ok(buf.read_u64::<BigEndian>().unwrap())
+}
+
+fn take_u32(src: &mut BytesMut) -> Result<u32, MessageCodecError> {
+    if src.len() < 4 {
+        return Err(MessageCodecError::SerializationError)
+    }
+    let mut buf: &[u8] = &src.split_to(4)[..];
+    Ok(buf.read_u32::<BigEndian>().unwrap())
 }
 
 pub struct MessageCodec {}
@@ -126,21 +183,71 @@ impl Encoder for MessageCodec {
             },
             MessageEvent::RequestFile(message) => {
                 buf.put_u8(REQUEST_FILE);
-                let bytes = message.as_bytes();
-                buf.put_u64(bytes.clone().len() as u64);
-                buf.put(bytes);
+                if let Some(artist) = message.clone().artist {
+                    buf.put_u64(artist.len() as u64);
+                    buf.put(artist.as_bytes());
+                } else {
+                    buf.put_u64(0);
+                }
+                if let Some(album) = message.album {
+                    buf.put_u64(album.len() as u64);
+                    buf.put(album.as_bytes());
+                } else {
+                    buf.put_u64(0);
+                }
             },
-            MessageEvent::Received(message) => {
-                buf.put_u8(REQUEST_FILE);
-                let bytes = message.as_bytes();
-                buf.put_u64(bytes.clone().len() as u64);
-                buf.put(bytes);
+            MessageEvent::ArtistsRequest => {
+                buf.put_u8(ARTISTS_REQUEST);
             },
+            MessageEvent::ArtistsResponse(artists) => {
+                buf.put_u8(ARTISTS_RESPONSE);
+                buf.put_u64(artists.len() as u64);
+                for artist in artists {
+                    if let Some(artist) = artist.artist {
+                        buf.put_u64(artist.len() as u64);
+                        buf.put(artist.as_bytes());
+                    } else {
+                        buf.put_u64(0);
+                    }
+
+                    if let Some(album) = artist.album {
+                        buf.put_u64(album.len() as u64);
+                        buf.put(album.as_bytes());
+                    } else {
+                        buf.put_u64(0);
+                    }
+                }
+
+            }
             _ => println!("UNKNOWN!!!"),
         }
         Ok(())
     }
 }
+
+fn get_artist_data(src: &mut BytesMut) -> ArtistData {
+    let artist_name_len = take_u64(src).unwrap() as usize;
+    let artist = get_nstring(src, artist_name_len);
+    let album_name_len = take_u64(src).unwrap() as usize;
+    let album = get_nstring(src, album_name_len);
+    ArtistData::new(
+        artist,
+        album,
+    )
+}
+
+fn get_track_data(src: &mut BytesMut) -> TrackData {
+    let track_name_len = take_u64(src).unwrap() as usize;
+    let track = get_nstring(src, track_name_len).unwrap();
+    let bitrate = take_u32(src).unwrap();
+    let length = take_u32(src).unwrap();
+    TrackData::new(
+        track,
+        bitrate,
+        length,
+    )
+}
+
 
 impl Decoder for MessageCodec {
     type Item = MessageEvent;
@@ -154,12 +261,8 @@ impl Decoder for MessageCodec {
             }
 
             let mut byte = src.split_to(1)[0];
-            if src.len() < 8 {
-                src.clear();
-                return Ok(None);
-            }
-            let mut buf: &[u8] = &src.split_to(8)[..];
-            let data_len = buf.read_u64::<BigEndian>().unwrap() as usize;
+            let data_len = take_u64(src).unwrap() as usize;
+
             if src.len() != data_len {
                 println!("{:?} {:?}", src.len(), data_len);
                 return Err(Self::Error::DataLengthMismatch);
@@ -184,10 +287,39 @@ impl Decoder for MessageCodec {
                     let message = get_string(src);
                     return Ok(Some(MessageEvent::Received(message)));
                 },
-                // REQUEST_FILE => {
-                //     let message = get_string(src);
-                //     return Ok(Some(MessageEvent::RequestFile(message)));
-                // }
+                REQUEST_FILE => {
+                    return Ok(Some(MessageEvent::RequestFile(
+                        get_artist_data(src)
+                    )));
+                },
+                ARTISTS_REQUEST => {
+                    return Ok(Some(MessageEvent::ArtistsRequest));
+                },
+                ARTISTS_RESPONSE => {
+                    let mut artist_count = take_u64(src).unwrap() as usize;
+                    let mut artist_vec: Vec<ArtistData> = vec![];
+                    while artist_count > 0 {
+                        let artist = get_artist_data(src);
+                        artist_vec.push(artist);
+                        artist_count -= 1;
+                    }
+                    return Ok(Some(MessageEvent::ArtistsResponse(artist_vec)));
+                },
+                ALBUM_REQUEST => {
+                    return Ok(Some(MessageEvent::AlbumRequest(
+                        get_artist_data(src)
+                    )));
+                },
+                ALBUM_RESPONSE => {
+                    let mut track_count = take_u64(src).unwrap() as usize;
+                    let mut track_vec: Vec<TrackData> = vec![];
+                    while track_count > 0 {
+                        let track = get_track_data(src);
+                        track_vec.push(track);
+                        track_count -= 1;
+                    }
+                    return Ok(Some(MessageEvent::AlbumResponse(track_vec)));
+                },
                 _ => {}
             }
             Ok(None)

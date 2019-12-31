@@ -10,7 +10,7 @@ use futures::SinkExt;
 use tokio::prelude::*;
 use tokio::sync::{mpsc, Mutex};
 use tokio::stream::{self, Stream, StreamExt};
-use tokio_util::codec::{Framed, LengthDelimitedCodec, LinesCodec, LinesCodecError};
+use tokio_util::codec::{BytesCodec, FramedRead, Framed, LengthDelimitedCodec, LinesCodec, LinesCodecError};
 
 use tokio::net::{
     TcpListener,
@@ -87,7 +87,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(Mutex::new(Shared::new()));
     let mut listener = TcpListener::bind("127.0.0.1:8080").await?;
 
+    // listen for local commands
+    tokio::spawn(async move {
+        println!("start local listener");
+        println!("connected");
+        loop {
+            let mut stdin = FramedRead::new(io::stdin(), BytesCodec::new());
+            while let Some(item) = stdin.next().await {
+                println!("{:?}", item);
+            }
+        }
+    });
+
     loop {
+        println!("start server");
         let (stream, addr) = listener.accept().await?;
         let state = Arc::clone(&state);
 
@@ -113,7 +126,6 @@ async fn process(
 ) -> Result<(), Box<dyn Error>> {
     let mut transport = Framed::new(stream, MessageCodec::new());
     let mut peer = Peer::new(state.clone(), transport).await?;
-
     {
         let mut state = state.lock().await;
         let msg = "broadcast test0";
