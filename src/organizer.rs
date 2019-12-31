@@ -1,6 +1,5 @@
 use std::fs::metadata;
 use serde::{Deserialize, Serialize};
-use std::ffi::OsStr;
 
 use crate::formats::mp3::{
     get_mp3_data,

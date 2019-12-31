@@ -1059,7 +1059,7 @@ dependencies = [
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "libsecp256k1 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libsecp256k1 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "multistream-select 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-multiaddr 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1381,7 +1381,7 @@ dependencies = [
 
 [[package]]
 name = "libsecp256k1"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "arrayref 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3175,7 +3175,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum libp2p-wasm-ext 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3f7b8f2bd81fb356e81352d4513856bc21215ecf91502aa1f55b6449642a9acf"
 "checksum libp2p-websocket 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0d74d4fc229ad7e8d1a973178786bdcd5dadbdd7b9822c4477c8687df6f82f66"
 "checksum libp2p-yamux 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1913eb7dd6eb5515957b6f1770296f6921968db87bc9b985f0e974b6657e1003"
-"checksum libsecp256k1 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "b0885ff5b8070cdafbf65b3d098a0b7daf4925a18a704d3c503996443b799cc2"
+"checksum libsecp256k1 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "df6edf84fd62aad1c93932b39324eaeda3912c1d26bc18dfaee6293848e49a50"
 "checksum libz-sys 1.0.25 (registry+https://github.com/rust-lang/crates.io-index)" = "2eb5e43362e38e2bca2fd5f5134c4d4564a23a5c28e9b95411652021a8675ebe"
 "checksum lock_api 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "62ebf1391f6acad60e5c8b43706dde4582df75c06698ab44511d15016bc2442c"
 "checksum lock_api 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ed946d4529956a20f2d63ebe1b69996d5a2137c91913fe3ebbeff957f5bca7ff"
