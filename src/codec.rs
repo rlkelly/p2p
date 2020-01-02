@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use tokio_util::codec::{Decoder, Encoder};
 use bytes::{BytesMut, BufMut};
 use byteorder::{BigEndian, ReadBytesExt};
@@ -15,13 +17,93 @@ use crate::models::{
     take_u64,
     get_nstring,
 };
-use crate::consts::{
-    PING, PONG, PAYLOAD, RECEIVED, REQUEST_FILE,
-    ARTISTS_REQUEST, ALBUM_REQUEST,
-    ARTISTS_RESPONSE, ALBUM_RESPONSE,
-};
+use crate::consts::*;
 
 const LENGTH_FIELD_LEN: usize = 4;
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Peer {
+    addr: SocketAddr,
+    name: Option<String>,
+    public_key: Option<String>,
+    signature: Option<String>, // sign to prove they have private key
+}
+
+fn bytes_to_ip_addr(src: &mut BytesMut) -> SocketAddr {
+    let addr_slice = src.split_to(16);
+    let mut addr = [0u8; 16];
+    for (x, y) in addr_slice.iter().zip(addr.iter_mut()) {
+        *y = *x;
+    }
+    let ip_addr: IpAddr = addr.into();
+    let mut port_slice: &[u8] = &src.split_to(2)[..];
+    let port = port_slice.read_u16::<BigEndian>().unwrap() as u16;
+    SocketAddr::new(ip_addr, port)
+}
+
+impl Peer {
+    pub fn new(addr: SocketAddr, name: Option<String>, public_key: Option<String>, signature: Option<String>) -> Self {
+        Peer {
+            addr,
+            name,
+            public_key,
+            signature,
+        }
+    }
+
+    pub fn to_bytes(&self) -> BytesMut {
+        let mut buf = BytesMut::new();
+        let ip_bytes = match self.addr.ip() {
+            IpAddr::V4(ip) => ip.octets().to_vec(),
+            IpAddr::V6(ip) => ip.octets().to_vec(),
+        };
+        let len = ip_bytes.len();
+        buf.put_uint(len as u64, LENGTH_FIELD_LEN);
+        buf.put(&ip_bytes[..]); // send the option
+
+        // factor this out
+        if let Some(name) = &self.name {
+            let name_length: u8 = name.len().try_into().unwrap();
+            buf.put_u8(name_length);
+            buf.put(name.as_bytes());
+        } else {
+            buf.put_u8(0);
+        };
+        if let Some(public_key) = &self.public_key {
+            let public_key_length: u8 = public_key.len().try_into().unwrap();
+            buf.put_u8(public_key_length);
+            buf.put(public_key.as_bytes());
+        } else {
+            buf.put_u8(0);
+        };
+        if let Some(signature) = &self.signature {
+            let signature_length: u8 = signature.len().try_into().unwrap();
+            buf.put_u8(signature_length);
+            buf.put(signature.as_bytes());
+        } else {
+            buf.put_u8(0);
+        };
+        buf
+    }
+
+    pub fn from_bytes(buf: &mut BytesMut) -> Self {
+        let ip_len = take_u64(buf).unwrap();
+        let addr = bytes_to_ip_addr(buf);
+        let name_key = buf.split_to(1)[0] as usize;
+        let name = get_nstring(buf, name_key);
+        let pk_key = buf.split_to(1)[0] as usize;
+        let public_key = get_nstring(buf, pk_key);
+        let signature_key = buf.split_to(1)[0] as usize;
+        let signature = get_nstring(buf, signature_key);
+        Peer {
+            addr,
+            name,
+            public_key,
+            signature,
+        }
+
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum MessageEvent {
@@ -36,8 +118,8 @@ pub enum MessageEvent {
     AlbumRequest(AlbumData),
     AlbumResponse(Vec<TrackData>),
     Ok,
-    // PeersRequest,
-    // PeersResponse(Vec<SocketAddr>),
+    PeersRequest,
+    PeersResponse(Vec<Peer>),
     Err(MessageCodecError),
 }
 
@@ -61,18 +143,6 @@ impl PartialEq for MessageCodecError {
       _ => false
     }
   }
-}
-
-fn bytes_to_ip_addr(src: &mut BytesMut) -> SocketAddr {
-    let addr_slice = src.split_to(16);
-    let mut addr = [0u8; 16];
-    for (x, y) in addr_slice.iter().zip(addr.iter_mut()) {
-        *y = *x;
-    }
-    let ip_addr: IpAddr = addr.into();
-    let mut port_slice: &[u8] = &src.split_to(2)[..];
-    let port = port_slice.read_u16::<BigEndian>().unwrap() as u16;
-    SocketAddr::new(ip_addr, port)
 }
 
 pub struct MessageCodec {}
@@ -146,7 +216,19 @@ impl Encoder for MessageCodec {
                 buf.put_u8(ALBUM_RESPONSE);
                 for track in tracks {
                     buf.extend_from_slice(&track.to_bytes()[..]);
-                }
+                };
+            },
+            MessageEvent::PeersRequest => {
+                buf.put_u8(PEERS_REQUEST);
+            },
+            MessageEvent::PeersResponse(peers) => {
+                buf.put_u8(PEERS_RESPONSE);
+                buf.put_u64(peers.len() as u64);
+                for peer in peers {
+                    let bytes = peer.to_bytes();
+                    buf.put_u64(bytes.len() as u64);
+                    buf.extend_from_slice(&bytes[..]);
+                };
             },
             _ => println!("UNKNOWN!!!"),
         }
@@ -232,6 +314,21 @@ impl Decoder for MessageCodec {
                         track_count -= 1;
                     }
                     return Ok(Some(MessageEvent::AlbumResponse(track_vec)));
+                },
+                PEERS_REQUEST => {
+                    return Ok(Some(MessageEvent::PeersRequest));
+                },
+                PEERS_RESPONSE => {
+                    // TODO: parse vector into bytes
+                    let mut peer_count = take_u64(src).unwrap() as usize;
+                    let mut peer_vec: Vec<Peer> = vec![];
+                    while peer_count > 0 {
+                        let peer: Peer = Peer::from_bytes(src);
+                        peer_vec.push(peer);
+                        peer_count -= 1;
+                    }
+
+                    return Ok(Some(MessageEvent::PeersResponse(vec![])));
                 },
                 _ => {}
             }
