@@ -1,10 +1,11 @@
 use bytes::{BytesMut, BufMut};
+use std::convert::TryInto;
 
 use std::str;
 use serde::{Deserialize, Serialize};
 
 use super::utils::{
-    take_u32,
+    take_u16,
     take_u64,
     get_nstring,
 };
@@ -142,12 +143,12 @@ impl AlbumData {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct TrackData {
     title: String,
-    bitrate: u32,
-    length: u32,
+    bitrate: u16,
+    length: u16,
 }
 
 impl TrackData {
-    pub fn new(title: String, bitrate: u32, length: u32) -> TrackData {
+    pub fn new(title: String, bitrate: u16, length: u16) -> TrackData {
         TrackData {
             title,
             bitrate,
@@ -159,8 +160,8 @@ impl TrackData {
         let mut buf = BytesMut::new();
         buf.put_u64(self.title.len() as u64);
         buf.put(self.title.as_bytes());
-        buf.put_u32(self.bitrate);
-        buf.put_u32(self.length);
+        buf.put_u16(self.bitrate);
+        buf.put_u16(self.length);
         buf
     }
 }
@@ -169,8 +170,8 @@ impl From<&mut BytesMut> for TrackData {
     fn from(buf: &mut BytesMut) -> TrackData {
         let track_name_len = take_u64(buf).unwrap() as usize;
         let track = get_nstring(buf, track_name_len).unwrap();
-        let bitrate = take_u32(buf).unwrap();
-        let length = take_u32(buf).unwrap();
+        let bitrate: u16 = take_u16(buf).unwrap();
+        let length: u16 = take_u16(buf).unwrap();
         TrackData::new(
             track,
             bitrate,

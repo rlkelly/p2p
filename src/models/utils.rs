@@ -31,6 +31,15 @@ pub(crate) fn take_u32(src: &mut BytesMut) -> Result<u32, MessageCodecError> {
     Ok(buf.read_u32::<BigEndian>().unwrap())
 }
 
+#[allow(dead_code)]
+pub(crate) fn take_u16(src: &mut BytesMut) -> Result<u16, MessageCodecError> {
+    if src.len() < 2 {
+        return Err(MessageCodecError::SerializationError)
+    }
+    let mut buf: &[u8] = &src.split_to(2)[..];
+    Ok(buf.read_u16::<BigEndian>().unwrap())
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum MessageCodecError {
     SerializationError,

@@ -15,10 +15,10 @@ pub struct MusicFileData {
     path: String,
     version: String,
     layer: String,
-    bitrate: u16,
+    pub bitrate: u16,
     sampling_freq: u16,
     channel_type: String,
-    title: String,
+    pub title: String,
     artist: String,
     album: String,
     year: u16,
@@ -44,7 +44,6 @@ impl MusicFileData {
         }
     }
 }
-
 
 pub fn get_mp3_data(file: &Path) -> Result<MusicFileData, FileError> {
     let meta = match mp3_metadata::read_from_file(file) {

@@ -33,3 +33,6 @@ mp3-metadata = "0.3.2"
 
 # tendermint
 abci = "0.6.4"
+
+[dev-dependencies]
+dirs = "2.0.2"
