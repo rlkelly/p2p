@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use std::sync::Arc;
 use std::error::Error;
 use std::collections::HashMap;
@@ -9,15 +8,14 @@ use std::task::{Context, Poll};
 use futures::SinkExt;
 use tokio::prelude::*;
 use tokio::sync::{mpsc, Mutex};
-use tokio::stream::{self, Stream, StreamExt};
-use tokio_util::codec::{BytesCodec, FramedRead, Framed, LengthDelimitedCodec, LinesCodec, LinesCodecError};
+use tokio::stream::{Stream, StreamExt};
+use tokio_util::codec::{BytesCodec, FramedRead, Framed};
 
 use tokio::net::{
     TcpListener,
     TcpStream,
 };
 
-use music_snobster::organizer::get_collection;
 use music_snobster::codec::{
     MessageEvent,
     MessageCodec,
@@ -124,7 +122,7 @@ async fn process(
     stream: TcpStream,
     addr: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
-    let mut transport = Framed::new(stream, MessageCodec::new());
+    let transport = Framed::new(stream, MessageCodec::new());
     let mut peer = Peer::new(state.clone(), transport).await?;
     {
         let mut state = state.lock().await;
@@ -137,14 +135,10 @@ async fn process(
         match result {
             Ok(MessageEvent::Broadcast(msg)) => {
                 let mut state = state.lock().await;
-                let msg = "broadcast test1";
-
                 state.broadcast(addr, &msg).await;
             },
             Ok(MessageEvent::Payload(msg)) => {
                 let mut state = state.lock().await;
-                let msg = "broadcast test2";
-
                 state.broadcast(addr, &msg).await;
             },
             Ok(MessageEvent::Received(msg)) => {

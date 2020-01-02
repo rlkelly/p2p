@@ -40,21 +40,23 @@ mod tests {
 
     #[test]
     fn test_sign() {
-        assert_ne!(chunk_file("/Users/user2/development/airlink/assets/beep.mp3"), vec!([1]));
+        assert_ne!(chunk_file("./static/01 - mirror.mp3"), vec!([1]));
     }
 
     #[test]
     fn test_root() {
-        let chunks = get_root("/Users/user2/development/airlink/assets/beep.mp3");
-        let chunks2 = get_root("/Users/user2/development/airlink/assets/beep.mp3");
+        use std::env;
+        println!("{:?}", env::current_dir().unwrap());
+        let chunks = get_root("./static/01 - mirror.mp3");
+        let chunks2 = get_root("./static/01 - mirror.mp3");
         assert_eq!(chunks, chunks2);
     }
 
     #[test]
     fn test_root_change() {
         assert_ne!(
-            get_root("/Users/user2/development/first.txt"),
-            get_root("/Users/user2/development/second.txt"),
+            get_root("./static/first.txt"),
+            get_root("./static/second.txt"),
         );
     }
 }

@@ -96,11 +96,13 @@ pub fn get_collection(dir_name: &str, track_data: bool, maybe_artist_filter: Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn test_folder() {
-        get_collection("/Users/user2/Documents/music", true, None);
-        get_collection("/Users/user2/Documents/music", false, None);
+        let home_dir = env::home_dir().unwrap().into_os_string().into_string().unwrap();
+        get_collection(&format!("{}/{}", home_dir, "/Documents/music"), true, None);
+        get_collection(&format!("{}/{}", home_dir, "/Documents/music"), false, None);
     }
 
     fn fake_arist() -> String {
