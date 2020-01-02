@@ -27,7 +27,7 @@ pub struct MusicFileData {
 }
 
 impl MusicFileData {
-    pub fn new() -> MusicFileData {
+    fn new() -> MusicFileData {
         MusicFileData {
             path: "a".to_string(),
             version: "a".to_string(),

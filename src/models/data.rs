@@ -1,5 +1,4 @@
 use bytes::{BytesMut, BufMut};
-use std::convert::TryInto;
 
 use std::str;
 use serde::{Deserialize, Serialize};

@@ -33,7 +33,7 @@ pub enum MessageEvent {
     RequestFile(ArtistData),
     ArtistsRequest,
     ArtistsResponse(Vec<ArtistData>),
-    AlbumRequest(ArtistData),
+    AlbumRequest(AlbumData),
     AlbumResponse(Vec<TrackData>),
     Ok,
     // PeersRequest,
@@ -49,7 +49,7 @@ pub enum MessageCodecError {
 }
 
 impl From<std::io::Error> for MessageCodecError {
-  fn from(err: std::io::Error) -> MessageCodecError {
+  fn from(_err: std::io::Error) -> MessageCodecError {
     MessageCodecError::IO
   }
 }
@@ -219,7 +219,7 @@ impl Decoder for MessageCodec {
                 ALBUM_REQUEST => {
                     // AlbumRequest(ArtistData),
                     return Ok(Some(MessageEvent::AlbumRequest(
-                        ArtistData::from_bytes(src)
+                        AlbumData::from_bytes(src)
                     )));
                 },
                 ALBUM_RESPONSE => {
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn test_serialize_album_request() {
         let mut res = BytesMut::new();
-        let album_request = MessageEvent::AlbumRequest(ArtistData::new(
+        let artist_data = ArtistData::new(
             "test1".to_string(),
             Some(
                 vec![
@@ -262,6 +262,12 @@ mod tests {
                     AlbumData::new(Some("test2".to_string()), "test3".to_string(), 0, None),
                 ]
             ),
+        );
+        let album_request = MessageEvent::AlbumRequest(AlbumData::new(
+            Some("test2".to_string()),
+            "test3".to_string(),
+            0,
+            Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
         ));
         MessageCodec{}.encode(album_request.clone(), &mut res).unwrap();
         let left = MessageCodec{}.decode(&mut res).unwrap().unwrap();

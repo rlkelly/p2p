@@ -13,9 +13,7 @@ use crate::models::{
 
 
 pub fn get_collection(dir_name: &str, track_data: bool, maybe_artist_filter: Option<&str>) -> Vec<ArtistData> {
-    let mut artist_vec: Vec<ArtistData> = vec!();
-
-    // let artist: Vec<ArtistData> = Vec::with_capacity(1024);
+    let mut artist_vec: Vec<ArtistData> = Vec::with_capacity(2048);
     let artists = std::fs::read_dir(dir_name).unwrap();
 
     for artist in artists {
@@ -35,7 +33,6 @@ pub fn get_collection(dir_name: &str, track_data: bool, maybe_artist_filter: Opt
                 let path = entry.path();
                 if metadata(path.clone()).unwrap().is_dir() {
                     let album_name = path.file_stem().unwrap().to_str().unwrap();
-                    // let mut track_vec: Vec<MusicFileData> = vec!();
                     let mut track_vec: Vec<TrackData> = vec![];
 
                     let tracks = std::fs::read_dir(path.clone()).unwrap();
@@ -80,7 +77,6 @@ pub fn get_collection(dir_name: &str, track_data: bool, maybe_artist_filter: Opt
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use dirs::home_dir;
 
     #[test]
