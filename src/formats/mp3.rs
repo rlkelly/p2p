@@ -1,6 +1,4 @@
 use std::path::Path;
-use std::fs::File;
-use std::io::BufReader;
 use std::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -53,9 +51,19 @@ pub fn get_mp3_data(file: &Path) -> Result<MusicFileData, FileError> {
         Ok(data) => data,
         Err(_) => return Err(FileError::InvalidFormat),
     };
+
     let tag = match meta.tag {
         Some(t) => t,
-        _ => return Err(FileError::InvalidFormat),
+        _ => {
+            mp3_metadata::AudioTag{
+                title: "".into(),
+                artist: "".into(),
+                album: "".into(),
+                year: 0,
+                comment: "".into(),
+                genre: mp3_metadata::Genre::Unknown,
+            }
+        },
     };
     let frame = &meta.frames[0];
 
@@ -91,6 +99,7 @@ mod tests {
 
     #[test]
     fn test_mp3() {
-        let _valid = get_mp3_data(Path::new("/Users/user2/Documents/music/Jeromes Dream/Completed 1997-2001/07 His Life Is My Denim Paradise All Day, Every Day.mp3")).unwrap();
+        const MP3_FILE: &str = "./static/01 - mirror.mp3";
+        let _valid = get_mp3_data(Path::new(MP3_FILE)).unwrap();
     }
 }
