@@ -7,3 +7,4 @@ pub mod organizer;
 pub mod peers;
 pub mod codec;
 pub mod consts;
+pub mod db;

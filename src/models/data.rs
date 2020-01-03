@@ -1,5 +1,5 @@
 use bytes::{BytesMut, BufMut};
-
+use std::convert::TryInto;
 use std::str;
 use serde::{Deserialize, Serialize};
 
@@ -143,11 +143,11 @@ impl AlbumData {
 pub struct TrackData {
     title: String,
     bitrate: u16,
-    length: u16,
+    length: u8,
 }
 
 impl TrackData {
-    pub fn new(title: String, bitrate: u16, length: u16) -> TrackData {
+    pub fn new(title: String, bitrate: u16, length: u8) -> TrackData {
         TrackData {
             title,
             bitrate,
@@ -160,7 +160,7 @@ impl TrackData {
         buf.put_u64(self.title.len() as u64);
         buf.put(self.title.as_bytes());
         buf.put_u16(self.bitrate);
-        buf.put_u16(self.length);
+        buf.put_u8(self.length);
         buf
     }
 }
@@ -170,7 +170,7 @@ impl From<&mut BytesMut> for TrackData {
         let track_name_len = take_u64(buf).unwrap() as usize;
         let track = get_nstring(buf, track_name_len).unwrap();
         let bitrate: u16 = take_u16(buf).unwrap();
-        let length: u16 = take_u16(buf).unwrap();
+        let length: u8 = buf.split_to(1)[0].try_into().unwrap();
         TrackData::new(
             track,
             bitrate,
