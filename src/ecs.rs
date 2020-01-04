@@ -10,6 +10,9 @@ use specs::prelude::{
 };
 use specs::world::Index;
 
+// TODO: deserialize and serialize nodes
+
+
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum NodeEvent {
     Discovered(Entity),
@@ -21,13 +24,13 @@ pub struct WorldState<P> {
     sorted: Vec<Entity>,
     addresses: HashMap<IpAddr, usize>,
     entities: HashMap<Index, usize>,
-    changed: EventChannel<NodeEvent>,
 
+    changed: EventChannel<NodeEvent>,
     reader_id: ReaderId<ComponentEvent>,
+
     modified: BitSet,
     inserted: BitSet,
     removed: BitSet,
-
     scratch_set: HashSet<Entity>,
 
     _phantom: PhantomData<P>,
@@ -243,10 +246,17 @@ mod tests {
 
     struct Node {
         addr: IpAddr,
+        name: String,
     }
 
     impl Component for Node {
         type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
+    }
+
+    impl Node {
+        fn name(&self) -> String {
+            self.name.clone()
+        }
     }
 
     impl NNode for Node {
@@ -280,10 +290,10 @@ mod tests {
         let ip3 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 3));
         let ip4 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 4));
 
-        let e1 = world.create_entity().with(Node { addr: ip1 }).build();
-        let e2 = world.create_entity().with(Node { addr: ip2 }).build();
-        let e3 = world.create_entity().with(Node { addr: ip3 }).build();
-        let e4 = world.create_entity().with(Node { addr: ip4 }).build();
+        let e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
+        let e2 = world.create_entity().with(Node { addr: ip2, name: "second".to_string() }).build();
+        let e3 = world.create_entity().with(Node { addr: ip3, name: "third".to_string() }).build();
+        let e4 = world.create_entity().with(Node { addr: ip4, name: "fourth".to_string() }).build();
 
         system.run_now(&mut world);
         world.maintain();
@@ -304,7 +314,7 @@ mod tests {
         assert_eq!(world.is_alive(e4), true);
 
         let ip5 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 5));
-        let e5 = world.create_entity().with(Node { addr: ip5 }).build();
+        let e5 = world.create_entity().with(Node { addr: ip5, name: "fifth".to_string() }).build();
         system.run_now(&mut world);
         world.maintain();
 
@@ -326,8 +336,8 @@ mod tests {
         let mut system = NodeSystem::<Node>::new(&mut world);
         let mut reader_id = world.write_resource::<WorldState<Node>>().track();
         let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-        let e1 = world.create_entity().with(Node { addr: ip1 }).build();
-        let e2 = world.create_entity().with(Node { addr: ip1 }).build();
+        let e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
+        let e2 = world.create_entity().with(Node { addr: ip1, name: "second".to_string() }).build();
         system.run_now(&mut world);
         delete_removals(&mut world, &mut reader_id);
         world.maintain();
@@ -336,6 +346,13 @@ mod tests {
         system.run_now(&mut world);
         world.maintain();
         assert_eq!(1, world.read_resource::<WorldState<Node>>().all().len());
+        let entity = world.read_resource::<WorldState<Node>>().all()[0];
+
+        let node_name = world.read_storage::<Node>()
+            .get(entity)
+            .map(|node| node.name())
+            .unwrap();
+        assert_eq!(node_name, "second".to_string());
     }
 
     #[test]
@@ -346,14 +363,17 @@ mod tests {
         let mut reader_id = world.write_resource::<WorldState<Node>>().track();
 
         let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-        let e1 = world.create_entity().with(Node { addr: ip1 }).build();
+        let e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
         system.run_now(&mut world);
         world.maintain();
 
-        let e2 = world.create_entity().with(Node { addr: ip1 }).build();
+        let e2 = world.create_entity().with(Node { addr: ip1, name: "second".to_string() }).build();
         system.run_now(&mut world);
         delete_removals(&mut world, &mut reader_id);
         world.maintain();
         assert_eq!(1, world.read_resource::<WorldState<Node>>().all().len());
+
+        let entity = world.fetch::<WorldState<Node>>().get_entity(&ip1).unwrap();
+        assert_eq!(entity, e2);
     }
 }

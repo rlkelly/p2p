@@ -25,17 +25,28 @@ use music_snobster::codec::{
 type Tx = mpsc::UnboundedSender<String>;
 type Rx = mpsc::UnboundedReceiver<String>;
 
-struct Shared {
+// TODO: handle requests
+//   - RESPOND WITH PEERS
+//   - RESPOND WITH COLLECTION
+//   - SEND FILE
+//   - REQUEST FILE
+//   - DOWNLOAD FILE
+// Integrate World State into Service
+//   - Add Peer
+//   - Remove Peer
+// Allow for local client to query data
+
+struct Service {
     peers: HashMap<SocketAddr, Tx>,
 }
 
-impl Shared {
+impl Service {
     fn new() -> Self {
-        Shared { peers: HashMap::new() }
+        Service { peers: HashMap::new() }
     }
 }
 
-impl Shared {
+impl Service {
     async fn broadcast(&mut self, sender: SocketAddr, message: &str) {
         for peer in self.peers.iter_mut() {
             if *peer.0 != sender {
@@ -52,7 +63,7 @@ struct Peer {
 
 impl Peer {
     async fn new(
-        state: Arc<Mutex<Shared>>,
+        state: Arc<Mutex<Service>>,
         messages: Framed<TcpStream, MessageCodec>,
     ) -> io::Result<Peer> {
         let addr = messages.get_ref().peer_addr()?;
@@ -79,10 +90,9 @@ impl Stream for Peer {
     }
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let state = Arc::new(Mutex::new(Shared::new()));
+    let state = Arc::new(Mutex::new(Service::new()));
     let mut listener = TcpListener::bind("127.0.0.1:8080").await?;
 
     // listen for local commands
@@ -109,7 +119,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // file.seek(SeekFrom::Start(1)).await;
             // tokio::io::copy(&mut file_buf, &mut writer).await;
             // writer.write(b"end").await;
-
             if let Err(e) = process(state, stream, addr).await {
                 println!("an error occured; error = {:?}", e);
             }
@@ -118,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn process(
-    state: Arc<Mutex<Shared>>,
+    state: Arc<Mutex<Service>>,
     stream: TcpStream,
     addr: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
@@ -126,7 +135,7 @@ async fn process(
     let mut peer = Peer::new(state.clone(), transport).await?;
     {
         let mut state = state.lock().await;
-        let msg = "broadcast test0";
+        let msg = "broadcast test";
         state.broadcast(addr, &msg).await;
     }
 
