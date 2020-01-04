@@ -87,7 +87,7 @@ impl Peer {
     }
 
     pub fn from_bytes(buf: &mut BytesMut) -> Self {
-        let ip_len = take_u64(buf).unwrap();
+        let _ip_len = take_u64(buf).unwrap();
         let addr = bytes_to_ip_addr(buf);
         let name_key = buf.split_to(1)[0] as usize;
         let name = get_nstring(buf, name_key);
