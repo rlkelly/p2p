@@ -87,7 +87,7 @@ impl Peer {
     }
 
     pub fn from_bytes(buf: &mut BytesMut) -> Self {
-        let ip_len = take_u64(buf).unwrap();
+        let _ip_len = take_u64(buf).unwrap();
         let addr = bytes_to_ip_addr(buf);
         let name_key = buf.split_to(1)[0] as usize;
         let name = get_nstring(buf, name_key);
@@ -107,8 +107,8 @@ impl Peer {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum MessageEvent {
-    Ping(SocketAddr), // add user data
-    Pong(SocketAddr), // add user data
+    Ping(Peer), // add user data
+    Pong(Peer), // add user data
     Payload(String),
     Broadcast(String),
     Received(String),
@@ -160,27 +160,11 @@ impl Encoder for MessageCodec {
   fn encode(&mut self, event: Self::Item, buf: &mut BytesMut) ->
     Result<(), Self::Error> {
         match event {
-            MessageEvent::Ping(addr) => {
-                let ip_bytes = match addr.ip() {
-                    IpAddr::V4(ip) => ip.octets().to_vec(),
-                    IpAddr::V6(ip) => ip.octets().to_vec(),
-                };
-                buf.reserve(16);
-                buf.put_u8(PING);
-                let len = ip_bytes.len();
-                buf.put_uint(len as u64, LENGTH_FIELD_LEN);
-                buf.put(&ip_bytes[..]); // send the option
+            MessageEvent::Ping(peer) => {
+                buf.extend_from_slice(&peer.to_bytes()[..])
             },
-            MessageEvent::Pong(addr) => {
-                let ip_bytes = match addr.ip() {
-                    IpAddr::V4(ip) => ip.octets().to_vec(),
-                    IpAddr::V6(ip) => ip.octets().to_vec(),
-                };
-                buf.reserve(16);
-                buf.put_u8(PONG);
-                let len = ip_bytes.len();
-                buf.put_uint(len as u64, LENGTH_FIELD_LEN);
-                buf.put(&ip_bytes[..]);
+            MessageEvent::Pong(peer) => {
+                buf.extend_from_slice(&peer.to_bytes()[..])
             },
             MessageEvent::Payload(message) => {
                 buf.put_u8(PAYLOAD);
@@ -262,12 +246,22 @@ impl Decoder for MessageCodec {
                 PING => {
                     let _data_len = take_u64(src).unwrap() as usize;
                     let ip = bytes_to_ip_addr(src);
-                    return Ok(Some(MessageEvent::Ping(ip)));
+                    return Ok(Some(MessageEvent::Ping(Peer::new(
+                        ip,
+                        None,
+                        None,
+                        None,
+                    ))));
                 },
                 PONG => {
                     let _data_len = take_u64(src).unwrap() as usize;
                     let ip = bytes_to_ip_addr(src);
-                    return Ok(Some(MessageEvent::Pong(ip)));
+                    return Ok(Some(MessageEvent::Pong(Peer::new(
+                        ip,
+                        None,
+                        None,
+                        None,
+                    ))));
                 },
                 PAYLOAD => {
                     let data_len = take_u64(src).unwrap() as usize;
@@ -391,7 +385,7 @@ mod tests {
         b.put_u64(18);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
-        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Ping(localhost_v6)));
+        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Ping(Peer::new(localhost_v6, None, None, None))));
     }
 
     #[test]
@@ -402,7 +396,10 @@ mod tests {
         b.put_u64(18);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
-        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong(localhost_v6)));
+        b.put_u8(0);
+        b.put_u8(0);
+        b.put_u8(0);
+        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong(Peer::new(localhost_v6, None, None, None))));
     }
 
     #[test]
