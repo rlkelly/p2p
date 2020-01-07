@@ -1,7 +1,22 @@
 use bytes::BytesMut;
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::{Deserialize, Serialize};
+use std::net::{
+    SocketAddr,
+    IpAddr,
+};
 
+pub fn bytes_to_ip_addr(src: &mut BytesMut) -> SocketAddr {
+    let addr_slice = src.split_to(16);
+    let mut addr = [0u8; 16];
+    for (x, y) in addr_slice.iter().zip(addr.iter_mut()) {
+        *y = *x;
+    }
+    let ip_addr: IpAddr = addr.into();
+    let mut port_slice: &[u8] = &src.split_to(2)[..];
+    let port = port_slice.read_u16::<BigEndian>().unwrap() as u16;
+    SocketAddr::new(ip_addr, port)
+}
 
 pub fn get_nstring(src: &mut BytesMut, n: usize) -> Option<String> {
     if n == 0 {

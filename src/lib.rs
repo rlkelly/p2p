@@ -9,6 +9,9 @@ pub mod organizer;
 pub mod codec;
 pub mod consts;
 pub mod ecs;
+pub mod storage;
 
 #[macro_use]
 extern crate shred_derive;
+
+extern crate rustbreak;
