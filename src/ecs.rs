@@ -284,7 +284,7 @@ mod tests {
         let mut world = World::new();
         world.register::<Node>();
         let mut system = NodeSystem::<Node>::new(&mut world);
-        let reader_id = world.write_resource::<WorldState<Node>>().track();
+        let _reader_id = world.write_resource::<WorldState<Node>>().track();
         let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
         let ip2 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2));
         let ip3 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 3));
@@ -336,8 +336,8 @@ mod tests {
         let mut system = NodeSystem::<Node>::new(&mut world);
         let mut reader_id = world.write_resource::<WorldState<Node>>().track();
         let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-        let e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
-        let e2 = world.create_entity().with(Node { addr: ip1, name: "second".to_string() }).build();
+        let _e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
+        let _e2 = world.create_entity().with(Node { addr: ip1, name: "second".to_string() }).build();
         system.run_now(&mut world);
         delete_removals(&mut world, &mut reader_id);
         world.maintain();
@@ -363,7 +363,7 @@ mod tests {
         let mut reader_id = world.write_resource::<WorldState<Node>>().track();
 
         let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-        let e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
+        let _e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
         system.run_now(&mut world);
         world.maintain();
 
