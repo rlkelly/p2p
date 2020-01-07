@@ -43,8 +43,9 @@ impl Peer {
             IpAddr::V6(ip) => ip.octets().to_vec(),
         };
         let len = ip_bytes.len();
-        buf.put_uint(len as u64, LENGTH_FIELD_LEN);
-        buf.put(&ip_bytes[..]); // send the option
+        buf.put_u64(len as u64);
+        buf.put(&ip_bytes[..]);
+        buf.put_u16(self.addr.port());
 
         if self.accept_incoming {
             buf.put_u8(1);

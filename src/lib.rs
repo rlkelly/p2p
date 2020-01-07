@@ -13,5 +13,3 @@ pub mod storage;
 
 #[macro_use]
 extern crate shred_derive;
-
-extern crate rustbreak;
