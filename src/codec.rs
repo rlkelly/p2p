@@ -24,6 +24,7 @@ const LENGTH_FIELD_LEN: usize = 4;
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Peer {
     addr: SocketAddr,
+    accept_incoming: bool,
     name: Option<String>,
     public_key: Option<String>,
     signature: Option<String>, // sign to prove they have private key
@@ -42,9 +43,10 @@ fn bytes_to_ip_addr(src: &mut BytesMut) -> SocketAddr {
 }
 
 impl Peer {
-    pub fn new(addr: SocketAddr, name: Option<String>, public_key: Option<String>, signature: Option<String>) -> Self {
+    pub fn new(addr: SocketAddr, accept_incoming: bool, name: Option<String>, public_key: Option<String>, signature: Option<String>) -> Self {
         Peer {
             addr,
+            accept_incoming,
             name,
             public_key,
             signature,
@@ -61,7 +63,13 @@ impl Peer {
         buf.put_uint(len as u64, LENGTH_FIELD_LEN);
         buf.put(&ip_bytes[..]); // send the option
 
-        // factor this out
+        if self.accept_incoming {
+            buf.put_u8(1);
+        } else {
+            buf.put_u8(0);
+        };
+
+        // TODO: factor this out
         if let Some(name) = &self.name {
             let name_length: u8 = name.len().try_into().unwrap();
             buf.put_u8(name_length);
@@ -89,6 +97,8 @@ impl Peer {
     pub fn from_bytes(buf: &mut BytesMut) -> Self {
         let _ip_len = take_u64(buf).unwrap();
         let addr = bytes_to_ip_addr(buf);
+        let accept_incoming_byte = buf.split_to(1)[0] as u8;
+        let accept_incoming = accept_incoming_byte == 1u8;
         let name_key = buf.split_to(1)[0] as usize;
         let name = get_nstring(buf, name_key);
         let pk_key = buf.split_to(1)[0] as usize;
@@ -97,6 +107,7 @@ impl Peer {
         let signature = get_nstring(buf, signature_key);
         Peer {
             addr,
+            accept_incoming,
             name,
             public_key,
             signature,
@@ -248,6 +259,7 @@ impl Decoder for MessageCodec {
                     let ip = bytes_to_ip_addr(src);
                     return Ok(Some(MessageEvent::Ping(Peer::new(
                         ip,
+                        false,
                         None,
                         None,
                         None,
@@ -258,6 +270,7 @@ impl Decoder for MessageCodec {
                     let ip = bytes_to_ip_addr(src);
                     return Ok(Some(MessageEvent::Pong(Peer::new(
                         ip,
+                        false,
                         None,
                         None,
                         None,
@@ -322,7 +335,7 @@ impl Decoder for MessageCodec {
                         peer_count -= 1;
                     }
 
-                    return Ok(Some(MessageEvent::PeersResponse(vec![])));
+                    return Ok(Some(MessageEvent::PeersResponse(peer_vec)));
                 },
                 _ => {}
             }
@@ -385,7 +398,7 @@ mod tests {
         b.put_u64(18);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
-        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Ping(Peer::new(localhost_v6, None, None, None))));
+        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Ping(Peer::new(localhost_v6, false, None, None, None))));
     }
 
     #[test]
@@ -399,7 +412,7 @@ mod tests {
         b.put_u8(0);
         b.put_u8(0);
         b.put_u8(0);
-        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong(Peer::new(localhost_v6, None, None, None))));
+        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong(Peer::new(localhost_v6, false, None, None, None))));
     }
 
     #[test]

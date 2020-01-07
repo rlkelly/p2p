@@ -1,5 +1,9 @@
 pub mod utils;
 pub mod data;
+mod peer;
+pub use peer::Peer;
+pub mod service;
+pub use service::Service;
 
 pub use self::data::{
     ArtistData,
