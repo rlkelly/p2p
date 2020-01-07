@@ -11,6 +11,8 @@ use std::sync::Arc;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use futures::SinkExt;
+use futures::sink::Send;
 use tokio::prelude::*;
 use tokio::sync::{mpsc, Mutex};
 use tokio::stream::Stream;
@@ -24,25 +26,31 @@ use crate::codec::{
     MessageCodecError,
 };
 
-// TODO: make this more private?
-pub struct Peer {
-    pub messages: Framed<TcpStream, MessageCodec>,
-    pub rx: Rx,
+// TODO: rename this?
+pub struct PeerConnection {
+    messages: Framed<TcpStream, MessageCodec>,
+    rx: Rx,
 }
 
-impl Peer {
+impl PeerConnection {
     pub async fn new(
         state: Arc<Mutex<Service>>,
         messages: Framed<TcpStream, MessageCodec>,
-    ) -> io::Result<Peer> {
+    ) -> io::Result<PeerConnection> {
         let addr = messages.get_ref().peer_addr()?;
         let (tx, rx) = mpsc::unbounded_channel();
         state.lock().await.peers.insert(addr, tx);
-        Ok( Peer { messages, rx })
+        Ok( PeerConnection { messages, rx })
+    }
+
+    pub fn send_message(&mut self, message: MessageEvent)
+        -> Send<'_, Framed<TcpStream, MessageCodec>, MessageEvent>
+    {
+        self.messages.send(message)
     }
 }
 
-impl Stream for Peer {
+impl Stream for PeerConnection {
     type Item = Result<MessageEvent, MessageCodecError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

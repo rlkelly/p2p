@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn test_serialize_album_request() {
         let mut res = BytesMut::new();
-        let artist_data = ArtistData::new(
+        let _artist_data = ArtistData::new(
             "test1".to_string(),
             Some(
                 vec![

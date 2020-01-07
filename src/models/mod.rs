@@ -1,7 +1,7 @@
 pub mod utils;
 pub mod data;
 mod peer;
-pub use peer::Peer;
+pub use peer::PeerConnection;
 pub mod service;
 pub use service::Service;
 

@@ -1,11 +1,10 @@
-use crate::models::Peer;
+use crate::models::PeerConnection;
 pub use crate::models::Service;
 
 use std::sync::Arc;
 use std::error::Error;
 use std::net::SocketAddr;
 
-use futures::SinkExt;
 use tokio::sync::Mutex;
 use tokio::stream::StreamExt;
 use tokio_util::codec::Framed;
@@ -25,7 +24,7 @@ pub async fn process(
     addr: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
     let transport = Framed::new(stream, MessageCodec::new());
-    let mut peer = Peer::new(state.clone(), transport).await?;
+    let mut peer = PeerConnection::new(state.clone(), transport).await?;
     {
         let mut state = state.lock().await;
         let msg = "broadcast test";
@@ -33,7 +32,6 @@ pub async fn process(
     }
 
     while let Some(result) = peer.next().await {
-        println!("result: {:?}", result);
         match result {
             Ok(MessageEvent::Broadcast(msg)) => {
                 let mut state = state.lock().await;
@@ -44,7 +42,7 @@ pub async fn process(
                 state.broadcast(addr, &msg).await;
             },
             Ok(MessageEvent::Received(msg)) => {
-                peer.messages.send(MessageEvent::Payload(msg)).await.unwrap();
+                peer.send_message(MessageEvent::Payload(msg)).await.unwrap();
             },
             Err(e) => {
                 println!(
