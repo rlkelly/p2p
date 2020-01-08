@@ -33,6 +33,13 @@ pub async fn process(
 
     while let Some(result) = peer.next().await {
         match result {
+            Ok(MessageEvent::Ping(_peer_data)) => {
+                // TODO: add to ecs
+                peer.send_message(MessageEvent::Pong).await.unwrap();
+            },
+            Ok(MessageEvent::Pong) => {
+                // add to peers
+            },
             Ok(MessageEvent::Broadcast(msg)) => {
                 let mut state = state.lock().await;
                 state.broadcast(addr, &msg).await;

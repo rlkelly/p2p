@@ -2,7 +2,49 @@ use bytes::{BytesMut, BufMut};
 use std::io::prelude::*;
 use std::fs::File;
 
+use specs::prelude::{Component, DenseVecStorage, FlaggedStorage, World};
+// use specs::world::Builder;
+use specs::{WorldExt, RunNow};
+use specs::world::Builder;
+
+use std::net::SocketAddr;
 use crate::models::Peer;
+use crate::ecs::{
+    Node,
+    NodeSystem,
+    WorldState,
+};
+
+
+impl Component for Peer {
+    type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
+}
+
+impl Node for Peer {
+    fn addr(&self) -> SocketAddr {
+        self.address
+    }
+}
+
+pub struct Db {
+    world: World,
+}
+
+impl Db {
+    pub fn new() -> Self {
+        let mut world = World::new();
+        world.register::<Peer>();
+        let _system = NodeSystem::<Peer>::new(&mut world);
+        let _reader_id = world.write_resource::<WorldState<Peer>>().track();
+        Db {
+            world,
+        }
+    }
+
+    pub fn add_entity(&mut self, n: Peer) {
+        self.world.create_entity().with(n).build();
+    }
+}
 
 pub fn load_peers(filename: &str) -> Vec<Peer> {
     let mut peers_vec: Vec<Peer> = vec!();

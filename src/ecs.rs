@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
-use std::net::IpAddr;
+use std::net::SocketAddr;
 
 use hibitset::BitSetLike;
 use shrev::EventChannel;
@@ -22,7 +22,7 @@ pub enum NodeEvent {
 
 pub struct WorldState<P> {
     sorted: Vec<Entity>,
-    addresses: HashMap<IpAddr, usize>,
+    addresses: HashMap<SocketAddr, usize>,
     entities: HashMap<Index, usize>,
 
     changed: EventChannel<NodeEvent>,
@@ -59,7 +59,7 @@ impl<P> WorldState<P> {
         }
     }
 
-    pub fn get_entity(&self, addr: &IpAddr) -> Option<Entity> {
+    pub fn get_entity(&self, addr: &SocketAddr) -> Option<Entity> {
         if let Some(ix) = self.addresses.get(addr) {
             Some(self.sorted[*ix])
         } else {
@@ -187,7 +187,7 @@ impl<P> WorldState<P> {
 }
 
 pub trait Node {
-    fn addr(&self) -> IpAddr;
+    fn addr(&self) -> SocketAddr;
 }
 
 #[derive(SystemData)]
@@ -245,7 +245,7 @@ mod tests {
     use specs::{WorldExt, RunNow};
 
     struct Node {
-        addr: IpAddr,
+        addr: SocketAddr,
         name: String,
     }
 
@@ -260,7 +260,7 @@ mod tests {
     }
 
     impl NNode for Node {
-        fn addr(&self) -> IpAddr {
+        fn addr(&self) -> SocketAddr {
             self.addr
         }
     }
@@ -285,10 +285,10 @@ mod tests {
         world.register::<Node>();
         let mut system = NodeSystem::<Node>::new(&mut world);
         let _reader_id = world.write_resource::<WorldState<Node>>().track();
-        let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-        let ip2 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2));
-        let ip3 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 3));
-        let ip4 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 4));
+        let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 80);
+        let ip2 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2)), 80);
+        let ip3 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 3)), 80);
+        let ip4 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 4)), 80);
 
         let e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
         let e2 = world.create_entity().with(Node { addr: ip2, name: "second".to_string() }).build();
@@ -313,7 +313,7 @@ mod tests {
         assert_eq!(world.is_alive(e3), false);
         assert_eq!(world.is_alive(e4), true);
 
-        let ip5 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 5));
+        let ip5 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 5)), 80);
         let e5 = world.create_entity().with(Node { addr: ip5, name: "fifth".to_string() }).build();
         system.run_now(&mut world);
         world.maintain();
@@ -335,7 +335,7 @@ mod tests {
         world.register::<Node>();
         let mut system = NodeSystem::<Node>::new(&mut world);
         let mut reader_id = world.write_resource::<WorldState<Node>>().track();
-        let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
+        let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 80);
         let _e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
         let _e2 = world.create_entity().with(Node { addr: ip1, name: "second".to_string() }).build();
         system.run_now(&mut world);
@@ -362,7 +362,7 @@ mod tests {
         let mut system = NodeSystem::<Node>::new(&mut world);
         let mut reader_id = world.write_resource::<WorldState<Node>>().track();
 
-        let ip1 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
+        let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 80);
         let _e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
         system.run_now(&mut world);
         world.maintain();

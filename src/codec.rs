@@ -1,8 +1,4 @@
 use bytes::{BytesMut, BufMut};
-use std::net::{
-    SocketAddr,
-    IpAddr,
-};
 use std::str;
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Decoder, Encoder};
@@ -21,7 +17,7 @@ use crate::consts::*;
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum MessageEvent {
     Ping(Peer), // add user data
-    Pong(Peer), // add user data
+    Pong, // add user data
     Payload(String),
     Broadcast(String),
     Received(String),
@@ -74,10 +70,11 @@ impl Encoder for MessageCodec {
     Result<(), Self::Error> {
         match event {
             MessageEvent::Ping(peer) => {
+                buf.put_u8(PING);
                 buf.extend_from_slice(&peer.to_bytes()[..])
             },
-            MessageEvent::Pong(peer) => {
-                buf.extend_from_slice(&peer.to_bytes()[..])
+            MessageEvent::Pong => {
+                buf.put_u8(PONG);
             },
             MessageEvent::Payload(message) => {
                 buf.put_u8(PAYLOAD);
@@ -168,15 +165,7 @@ impl Decoder for MessageCodec {
                     ))));
                 },
                 PONG => {
-                    let _data_len = take_u64(src).unwrap() as usize;
-                    let ip = bytes_to_ip_addr(src);
-                    return Ok(Some(MessageEvent::Pong(Peer::new(
-                        ip,
-                        false,
-                        None,
-                        None,
-                        None,
-                    ))));
+                    return Ok(Some(MessageEvent::Pong));
                 },
                 PAYLOAD => {
                     let data_len = take_u64(src).unwrap() as usize;
@@ -249,7 +238,7 @@ impl Decoder for MessageCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::Ipv6Addr;
+    use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 
     #[test]
     fn test_serialize_album_request() {
@@ -305,16 +294,9 @@ mod tests {
 
     #[test]
     fn test_encode_pong() {
-        let localhost_v6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
         let mut b = BytesMut::new();
         b.put_u8(PONG);
-        b.put_u64(18);
-        b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
-        b.put_u16(8000);
-        b.put_u8(0);
-        b.put_u8(0);
-        b.put_u8(0);
-        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong(Peer::new(localhost_v6, false, None, None, None))));
+        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong));
     }
 
     #[test]
