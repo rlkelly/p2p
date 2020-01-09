@@ -27,6 +27,7 @@ pub struct MusicFileData {
 }
 
 impl MusicFileData {
+    #[allow(dead_code)]
     fn new() -> MusicFileData {
         MusicFileData {
             path: "a".to_string(),

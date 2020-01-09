@@ -4,7 +4,7 @@ pub mod vorbis;
 use std::path::Path;
 use std::ffi::OsStr;
 
-
+#[allow(dead_code)]
 fn get_extension_from_filename(filename: &str) -> Option<&str> {
     Path::new(filename)
         .extension()

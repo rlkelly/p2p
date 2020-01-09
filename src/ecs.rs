@@ -112,7 +112,7 @@ impl<P> WorldState<P> {
         }
 
         // bump duplicates
-        for (entity, _, node) in (&*entities, &self.inserted, &nodes).join() {
+        for (_entity, _, node) in (&*entities, &self.inserted, &nodes).join() {
             if let Some(ix) = self.addresses.get(&node.addr()) {
                 let other_entity = self.sorted[ix.clone()];
                 self.removed.add(other_entity.id());

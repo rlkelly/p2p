@@ -80,13 +80,7 @@ mod tests {
     use dirs::home_dir;
 
     #[test]
-    fn test_folder() {
-        let home_dir = home_dir().unwrap().into_os_string().into_string().unwrap();
-        get_collection(&format!("{}/{}", home_dir, "Documents/music"), true, None);
-        get_collection(&format!("{}/{}", home_dir, "Documents/music"), false, None);
-    }
-
-    fn test_fake_arist() -> String {
+    fn test_fake_artist() {
         let artist = ArtistData::new(
             "test1".to_string(),
             Some(
@@ -102,6 +96,14 @@ mod tests {
                 ]
             ),
         );
-        serde_json::to_string(&artist).unwrap()
+        serde_json::to_string(&artist).unwrap();
     }
+
+    #[test]
+    fn test_folder() {
+        let home_dir = home_dir().unwrap().into_os_string().into_string().unwrap();
+        get_collection(&format!("{}/{}", home_dir, "Documents/music"), true, None);
+        get_collection(&format!("{}/{}", home_dir, "Documents/music"), false, None);
+    }
+
 }
