@@ -22,7 +22,7 @@ impl Service {
             peers: HashMap::new(),
             my_contact: Peer::get_self(),
             database: Db::new_from_file("/tmp/thing.bin"),
-            storage_dir: "~/Documents/music".into(),
+            storage_dir: "/Users/user2/Documents/music".into(),
         }
     }
 

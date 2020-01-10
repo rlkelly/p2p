@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
-use tokio::prelude::*;
 use tokio::sync::Mutex;
-use tokio::stream::StreamExt;
-use tokio_util::codec::{BytesCodec, FramedRead};
+// use tokio_util::codec::{BytesCodec, FramedRead};
 
 use tokio::net::TcpListener;
 
 use music_snobster::handlers::{process, Service};
 use music_snobster::args::get_args;
-
+use music_snobster::tui::run_tui;
 // TODO: handle requests
 //   - SEND FILE
 //   - REQUEST FILE
@@ -26,18 +24,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut listener = TcpListener::bind(format!("127.0.0.1:{}", config.port)).await?;
 
     // listen for local commands
+    let tui_state = Arc::clone(&state);
     tokio::spawn(async move {
-        println!("start local listener");
-        loop {
-            let mut stdin = FramedRead::new(io::stdin(), BytesCodec::new());
-            while let Some(item) = stdin.next().await {
-                println!("{:?}", item);
-            }
-        }
+        run_tui(tui_state);
+        std::process::exit(0);
+        // loop {
+        //     let mut stdin = FramedRead::new(io::stdin(), BytesCodec::new());
+        //     while let Some(item) = stdin.next().await {
+        //     println!("{:?}", item);
+        // }
     });
 
     loop {
-        println!("start server");
         let (stream, addr) = listener.accept().await?;
         let state = Arc::clone(&state);
 
