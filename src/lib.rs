@@ -10,6 +10,10 @@ pub mod codec;
 pub mod consts;
 pub mod ecs;
 pub mod storage;
+pub mod args;
 
 #[macro_use]
 extern crate shred_derive;
+
+#[macro_use]
+extern crate clap;

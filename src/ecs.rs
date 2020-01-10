@@ -10,9 +10,6 @@ use specs::prelude::{
 };
 use specs::world::Index;
 
-// TODO: deserialize and serialize nodes
-
-
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum NodeEvent {
     Discovered(Entity),

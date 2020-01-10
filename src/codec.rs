@@ -140,15 +140,7 @@ impl Decoder for MessageCodec {
             }
 
             let byte = src.split_to(1)[0];
-
-            // let data_len = take_u64(src).unwrap() as usize;
-            // if src.len() != data_len {
-            //     println!("{:?} {:?}", src.len(), data_len);
-            //     return Err(Self::Error::DataLengthMismatch);
-            // }
-            // // drop trailing bytes
-            // src.split_off(data_len);
-
+            // TODO: validate data length
             match byte {
                 PING => {
                     let peer = Peer::from_bytes(src);
