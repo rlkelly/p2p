@@ -4,17 +4,21 @@ use std::fs::File;
 
 use specs::prelude::{Component, DenseVecStorage, FlaggedStorage, World};
 // use specs::world::Builder;
-use specs::WorldExt;
+use specs::{RunNow, WorldExt};
 use specs::join::Join;
 use specs::world::Builder;
 
 use std::net::SocketAddr;
-use crate::models::Peer;
+use crate::models::{AlbumData, Collection, Peer};
 use crate::ecs::{
     Node,
     NodeSystem,
     WorldState,
 };
+
+impl Component for Collection {
+    type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
+}
 
 impl Component for Peer {
     type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
@@ -28,20 +32,24 @@ impl Node for Peer {
 
 pub struct Db {
     world: World,
+    system: NodeSystem<Peer>,
 }
 
 impl Db {
     pub fn new() -> Self {
         let mut world = World::new();
         world.register::<Peer>();
-        let _system = NodeSystem::<Peer>::new(&mut world);
+        world.register::<Collection>();
+        let system = NodeSystem::<Peer>::new(&mut world);
         let _reader_id = world.write_resource::<WorldState<Peer>>().track();
         Db {
             world,
+            system,
         }
     }
 
     pub fn maintain(&mut self) {
+        self.system.run_now(&mut self.world);
         self.world.maintain();
     }
 
@@ -49,9 +57,52 @@ impl Db {
         self.world.read_storage::<Peer>().join().map(|x| x.clone()).collect()
     }
 
-    pub fn add_peer(&mut self, n: Peer) {
-        self.world.create_entity().with(n).build();
+    pub fn add_peer(&mut self, p: Peer, c: Collection) {
+        self.world.create_entity().with(p).with(c).build();
         self.maintain()
+    }
+
+    pub fn add_peers(&mut self, peers: Vec<Peer>) {
+        for peer in peers {
+            self.world.create_entity().with(peer).with(Collection::new(vec![])).build();
+        }
+        self.maintain()
+    }
+
+    pub fn add_tracks(&mut self, addr: &SocketAddr, album_data: AlbumData) {
+        // TODO: address by reference
+        let mut collection = self.get_collection(addr);
+        let artist_name = album_data.clone().artist.unwrap();
+        let album_title = album_data.clone().album_title;
+
+        // TODO: change to hashmap?
+        'outer: for artist in &mut collection.artists {
+            if artist.artist == artist_name {
+                for album in artist.albums.as_mut().unwrap() {
+                    if album.album_title == album_title {
+                        *album = album_data;
+                        break 'outer;
+                    }
+                }
+            }
+        }
+        self.update_collection(addr, collection);
+    }
+
+    pub fn update_collection(&mut self, addr: &SocketAddr, c: Collection) {
+        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(addr).unwrap();
+        self.world.write_storage::<Collection>()
+            .insert(entity, c)
+            .unwrap();
+    }
+
+    pub fn get_collection(&mut self, addr: &SocketAddr) -> Collection {
+        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(addr).unwrap();
+        // use Box?
+        self.world.read_storage::<Collection>()
+            .get(entity)
+            .unwrap()
+            .clone()
     }
 
     pub fn new_from_file(filename: &str) -> Self {
@@ -66,7 +117,7 @@ impl Db {
             let peer_length = bytes.split_to(1)[0] as usize;
             let mut peer_bytes = bytes.split_to(peer_length);
             let peer = Peer::from_bytes(&mut peer_bytes);
-            db.add_peer(peer);
+            db.add_peer(peer, Collection::new(vec![]));
             peers_length -= 1;
         }
         db
@@ -95,6 +146,7 @@ mod tests {
         SocketAddr,
         IpAddr,
     };
+    use crate::models::{ArtistData, AlbumData, TrackData};
 
     #[test]
     fn test_dump_and_load() {
@@ -104,9 +156,83 @@ mod tests {
         let p1 = Peer::new(ip1, false, Some("TEST".into()), None, Some("ZYX987".into()));
         let p2 = Peer::new(ip2, true, None, Some("ABC123".into()), None);
 
-        dump("/tmp/thing.bin", vec![p1.clone(), p2.clone()]);
-        let db = Db::new_from_file("/tmp/thing.bin");
+        dump("/tmp/thing1.bin", vec![p1.clone(), p2.clone()]);
+        let db = Db::new_from_file("/tmp/thing1.bin");
         let peers = db.all_peers();
         assert_eq!(peers, vec![p1, p2]);
+    }
+
+    #[test]
+    fn test_update_collection() {
+        let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
+        let ip2 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2)), 8000);
+
+        let p1 = Peer::new(ip1, false, Some("TEST".into()), None, Some("ZYX987".into()));
+        let p2 = Peer::new(ip2, true, None, Some("ABC123".into()), None);
+
+        dump("/tmp/thing2.bin", vec![p1.clone(), p2.clone()]);
+        let mut db = Db::new_from_file("/tmp/thing2.bin");
+        assert_eq!(db.get_collection(&ip1), Collection::new(vec![]));
+
+        let artist_data = ArtistData::new(
+            "test1".to_string(),
+            Some(
+                vec![
+                    AlbumData::new(
+                        Some(
+                            "test2".to_string()),
+                            "test3".to_string(),
+                            0,
+                            Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
+                        ),
+                    AlbumData::new(Some("test2".to_string()), "test3".to_string(), 0, None),
+                ]
+            ),
+        );
+        let artists_vec = vec![artist_data.clone()];
+        let collection = Collection::new(artists_vec);
+        db.update_collection(&ip1, collection.clone());
+        assert_eq!(db.all_peers().len(), 2);
+        assert_eq!(db.get_collection(&ip1), collection);
+    }
+
+    #[test]
+    fn test_add_tracks() {
+        let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
+        let p1 = Peer::new(ip1, false, Some("TEST".into()), None, Some("ZYX987".into()));
+
+        dump("/tmp/thing3.bin", vec![p1.clone(), ]);
+        let mut db = Db::new_from_file("/tmp/thing3.bin");
+        let artist_data = ArtistData::new(
+            "first artist".to_string(),
+            Some(
+                vec![
+                    AlbumData::new(
+                        Some("first artist".to_string()),
+                        "first album".to_string(),
+                        0,
+                        None,
+                    ),
+                    AlbumData::new(
+                        Some("first artist".to_string()),
+                        "second album".to_string(),
+                        0,
+                        None,
+                    ),
+                ]
+            ),
+        );
+        let collection = Collection::new(vec![artist_data]);
+        db.update_collection(&ip1, collection.clone());
+        assert_eq!(None, db.get_collection(&ip1).artists[0].albums.as_ref().unwrap()[0].tracks);
+
+        let album_data = AlbumData::new(
+            Some("first artist".to_string()),
+            "first album".to_string(),
+            1,
+            Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
+        );
+        db.add_tracks(&ip1, album_data);
+        assert_eq!(1, db.get_collection(&ip1).artists[0].albums.as_ref().unwrap()[0].tracks.as_ref().unwrap().len());
     }
 }

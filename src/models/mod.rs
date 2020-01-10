@@ -8,6 +8,7 @@ pub use self::service::Service;
 pub use self::data::{
     ArtistData,
     AlbumData,
+    Collection,
     TrackData,
 };
 

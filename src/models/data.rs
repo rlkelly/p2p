@@ -10,9 +10,31 @@ use super::utils::{
 };
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Collection {
+    pub artists: Vec<ArtistData>,
+}
+
+impl Collection {
+    pub fn new(artists: Vec<ArtistData>) -> Self {
+        Collection {artists}
+    }
+
+    pub fn to_bytes(&self) -> BytesMut {
+        let mut buf = BytesMut::new();
+        buf.put_u64(self.artists.len() as u64);
+        for artist in &self.artists {
+            let artist_bytes = artist.to_bytes();
+            buf.put_u8(artist_bytes.len() as u8);
+            buf.extend_from_slice(&artist_bytes[..]);
+        }
+        buf
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct ArtistData {
-    artist: String,
-    albums: Option<Vec<AlbumData>>,
+    pub artist: String,
+    pub albums: Option<Vec<AlbumData>>,
 }
 
 impl ArtistData {
@@ -64,10 +86,10 @@ impl ArtistData {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct AlbumData {
-    artist: Option<String>,
-    album_title: String,
+    pub artist: Option<String>,
+    pub album_title: String,
     track_count: u8,
-    tracks: Option<Vec<TrackData>>,
+    pub tracks: Option<Vec<TrackData>>,
 }
 
 impl AlbumData {

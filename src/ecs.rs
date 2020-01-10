@@ -266,6 +266,7 @@ mod tests {
     }
 
     fn delete_removals(world: &mut World, reader_id: &mut ReaderId<NodeEvent>) {
+        // TODO: this is a kludge
         let mut remove = vec![];
         for event in world.fetch::<WorldState<Node>>().changed().read(reader_id) {
             if let NodeEvent::Removed(entity) = *event {

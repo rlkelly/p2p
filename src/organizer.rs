@@ -12,7 +12,7 @@ use crate::models::{
 };
 
 
-pub fn get_collection(dir_name: &str, track_data: bool, maybe_artist_filter: Option<&str>) -> Vec<ArtistData> {
+pub fn get_collection(dir_name: &str, track_data: bool, maybe_artist_filter: Option<&str>, maybe_album_filter: Option<&str>) -> Vec<ArtistData> {
     let mut artist_vec: Vec<ArtistData> = Vec::with_capacity(2048);
     let artists = std::fs::read_dir(dir_name).unwrap();
 
@@ -33,6 +33,12 @@ pub fn get_collection(dir_name: &str, track_data: bool, maybe_artist_filter: Opt
                 let path = entry.path();
                 if metadata(path.clone()).unwrap().is_dir() {
                     let album_name = path.file_stem().unwrap().to_str().unwrap();
+                    if let Some(album_filter) = maybe_album_filter {
+                        if album_name != album_filter {
+                            continue
+                        }
+                    }
+
                     let mut track_vec: Vec<TrackData> = vec![];
 
                     let tracks = std::fs::read_dir(path.clone()).unwrap();
@@ -102,8 +108,8 @@ mod tests {
     #[test]
     fn test_folder() {
         let home_dir = home_dir().unwrap().into_os_string().into_string().unwrap();
-        get_collection(&format!("{}/{}", home_dir, "Documents/music"), true, None);
-        get_collection(&format!("{}/{}", home_dir, "Documents/music"), false, None);
+        get_collection(&format!("{}/{}", home_dir, "Documents/music"), true, None, None);
+        get_collection(&format!("{}/{}", home_dir, "Documents/music"), false, None, None);
     }
 
 }

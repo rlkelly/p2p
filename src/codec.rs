@@ -7,10 +7,8 @@ use crate::models::{
     ArtistData,
     AlbumData,
     Peer,
-    TrackData,
     take_u64,
     get_nstring,
-    bytes_to_ip_addr,
 };
 use crate::consts::*;
 
@@ -25,7 +23,7 @@ pub enum MessageEvent {
     ArtistsRequest,
     ArtistsResponse(Vec<ArtistData>),
     AlbumRequest(AlbumData),
-    AlbumResponse(Vec<TrackData>),
+    AlbumResponse(AlbumData),
     PeersRequest,
     PeersResponse(Vec<Peer>),
     Err(MessageCodecError),
@@ -107,11 +105,9 @@ impl Encoder for MessageCodec {
                 buf.put_u8(ALBUM_REQUEST);
                 buf.extend_from_slice(&mut album.to_bytes()[..]);
             },
-            MessageEvent::AlbumResponse(tracks) => {
+            MessageEvent::AlbumResponse(album) => {
                 buf.put_u8(ALBUM_RESPONSE);
-                for track in tracks {
-                    buf.extend_from_slice(&track.to_bytes()[..]);
-                };
+                buf.extend_from_slice(&mut album.to_bytes()[..]);
             },
             MessageEvent::PeersRequest => {
                 buf.put_u8(PEERS_REQUEST);
@@ -199,14 +195,9 @@ impl Decoder for MessageCodec {
                 },
                 ALBUM_RESPONSE => {
                     // AlbumResponse(Vec<TrackData>),
-                    let mut track_count = take_u64(src).unwrap() as usize;
-                    let mut track_vec: Vec<TrackData> = vec![];
-                    while track_count > 0 {
-                        let track: TrackData = src.into();
-                        track_vec.push(track);
-                        track_count -= 1;
-                    }
-                    return Ok(Some(MessageEvent::AlbumResponse(track_vec)));
+                    return Ok(Some(MessageEvent::AlbumRequest(
+                        AlbumData::from_bytes(src)
+                    )));
                 },
                 PEERS_REQUEST => {
                     return Ok(Some(MessageEvent::PeersRequest));
@@ -233,26 +224,12 @@ impl Decoder for MessageCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::TrackData;
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 
     #[test]
     fn test_serialize_album_request() {
         let mut res = BytesMut::new();
-        let _artist_data = ArtistData::new(
-            "test1".to_string(),
-            Some(
-                vec![
-                    AlbumData::new(
-                        Some(
-                            "test2".to_string()),
-                            "test3".to_string(),
-                            0,
-                            Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
-                        ),
-                    AlbumData::new(Some("test2".to_string()), "test3".to_string(), 0, None),
-                ]
-            ),
-        );
         let album_request = MessageEvent::AlbumRequest(AlbumData::new(
             Some("test2".to_string()),
             "test3".to_string(),
