@@ -1,4 +1,4 @@
-use crate::models::PeerConnection;
+use crate::models::{Peer, PeerConnection};
 pub use crate::models::Service;
 
 use std::sync::Arc;
@@ -25,21 +25,39 @@ pub async fn process(
 ) -> Result<(), Box<dyn Error>> {
     let transport = Framed::new(stream, MessageCodec::new());
     let mut peer = PeerConnection::new(state.clone(), transport).await?;
-    {
-        let mut state = state.lock().await;
-        let msg = "broadcast test";
-        state.broadcast(addr, &msg).await;
-    }
-
     while let Some(result) = peer.next().await {
         match result {
-            Ok(MessageEvent::Ping(_peer_data)) => {
-                // TODO: add to ecs
-                peer.send_message(MessageEvent::Pong).await.unwrap();
+            Ok(MessageEvent::Ping(peer_data)) => {
+                let mut state = state.lock().await;
+                peer.send_message(MessageEvent::Pong(state.my_contact.clone())).await.unwrap();
+                state.database.add_peer(peer_data)
             },
-            Ok(MessageEvent::Pong) => {
-                // add to peers
+            Ok(MessageEvent::Pong(peer_data)) => {
+                let mut state = state.lock().await;
+                state.database.add_peer(peer_data)
             },
+            Ok(MessageEvent::ArtistsRequest) => {
+                // send artists
+            },
+            Ok(MessageEvent::ArtistsResponse(artist_data)) => {
+                // add artists to ecs for peer
+            },
+            Ok(MessageEvent::AlbumRequest(album)) => {
+                // send albums
+            },
+            Ok(MessageEvent::AlbumResponse(track_data)) => {
+                // display track data
+            },
+            Ok(MessageEvent::PeersRequest) => {
+                // send peers
+            },
+            Ok(MessageEvent::PeersResponse(peers_list)) => {
+                // load peers
+            },
+            Ok(MessageEvent::Received(msg)) => {
+                peer.send_message(MessageEvent::Payload(msg)).await.unwrap();
+            },
+            Ok(MessageEvent::Ok) => {},
             Ok(MessageEvent::Broadcast(msg)) => {
                 let mut state = state.lock().await;
                 state.broadcast(addr, &msg).await;
@@ -48,22 +66,17 @@ pub async fn process(
                 let mut state = state.lock().await;
                 state.broadcast(addr, &msg).await;
             },
-            Ok(MessageEvent::Received(msg)) => {
-                peer.send_message(MessageEvent::Payload(msg)).await.unwrap();
-            },
             Err(e) => {
                 println!(
                     "an error occured while processing messages; error = {:?}", e
                 );
             },
-            _ => println!("UNK"),
+            _ => println!("UNK"), // do nothing?
         }
     }
-    {
-        let mut state = state.lock().await;
-        state.peers.remove(&addr);
-        let msg = "broadcast test3";
-        state.broadcast(addr, &msg).await;
-    }
+    let mut state = state.lock().await;
+    state.peers.remove(&addr);
+    let msg = "broadcast test3";
+    state.broadcast(addr, &msg).await;
     Ok(())
 }

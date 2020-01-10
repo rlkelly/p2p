@@ -16,7 +16,6 @@ use crate::ecs::{
     WorldState,
 };
 
-
 impl Component for Peer {
     type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
 }
@@ -50,7 +49,7 @@ impl Db {
         self.world.read_storage::<Peer>().join().map(|x| x.clone()).collect()
     }
 
-    pub fn add_entity(&mut self, n: Peer) {
+    pub fn add_peer(&mut self, n: Peer) {
         self.world.create_entity().with(n).build();
         self.maintain()
     }
@@ -67,7 +66,7 @@ impl Db {
             let peer_length = bytes.split_to(1)[0] as usize;
             let mut peer_bytes = bytes.split_to(peer_length);
             let peer = Peer::from_bytes(&mut peer_bytes);
-            db.add_entity(peer);
+            db.add_peer(peer);
             peers_length -= 1;
         }
         db
@@ -102,8 +101,8 @@ mod tests {
         let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
         let ip2 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2)), 8000);
 
-        let p1 = Peer::new(ip1, false, None, None, None);
-        let p2 = Peer::new(ip2, true, None, None, None);
+        let p1 = Peer::new(ip1, false, Some("TEST".into()), None, Some("ZYX987".into()));
+        let p2 = Peer::new(ip2, true, None, Some("ABC123".into()), None);
 
         dump("/tmp/thing.bin", vec![p1.clone(), p2.clone()]);
         let db = Db::new_from_file("/tmp/thing.bin");

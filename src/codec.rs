@@ -17,7 +17,7 @@ use crate::consts::*;
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum MessageEvent {
     Ping(Peer), // add user data
-    Pong, // add user data
+    Pong(Peer), // add user data
     Payload(String),
     Broadcast(String),
     Received(String),
@@ -26,10 +26,10 @@ pub enum MessageEvent {
     ArtistsResponse(Vec<ArtistData>),
     AlbumRequest(AlbumData),
     AlbumResponse(Vec<TrackData>),
-    Ok,
     PeersRequest,
     PeersResponse(Vec<Peer>),
     Err(MessageCodecError),
+    Ok,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -73,8 +73,9 @@ impl Encoder for MessageCodec {
                 buf.put_u8(PING);
                 buf.extend_from_slice(&peer.to_bytes()[..])
             },
-            MessageEvent::Pong => {
+            MessageEvent::Pong(peer) => {
                 buf.put_u8(PONG);
+                buf.extend_from_slice(&peer.to_bytes()[..])
             },
             MessageEvent::Payload(message) => {
                 buf.put_u8(PAYLOAD);
@@ -154,18 +155,12 @@ impl Decoder for MessageCodec {
 
             match byte {
                 PING => {
-                    let _data_len = take_u64(src).unwrap() as usize;
-                    let ip = bytes_to_ip_addr(src);
-                    return Ok(Some(MessageEvent::Ping(Peer::new(
-                        ip,
-                        false,
-                        None,
-                        None,
-                        None,
-                    ))));
+                    let peer = Peer::from_bytes(src);
+                    return Ok(Some(MessageEvent::Ping(peer)));
                 },
                 PONG => {
-                    return Ok(Some(MessageEvent::Pong));
+                    let peer = Peer::from_bytes(src);
+                    return Ok(Some(MessageEvent::Pong(peer)));
                 },
                 PAYLOAD => {
                     let data_len = take_u64(src).unwrap() as usize;
@@ -289,14 +284,26 @@ mod tests {
         b.put_u64(18);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
+        b.put_u8(0);
+        b.put_u8(0);
+        b.put_u8(0);
+        b.put_u8(0);
         assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Ping(Peer::new(localhost_v6, false, None, None, None))));
     }
 
     #[test]
     fn test_encode_pong() {
+        let localhost_v6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
         let mut b = BytesMut::new();
         b.put_u8(PONG);
-        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong));
+        b.put_u64(18);
+        b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        b.put_u16(8000);
+        b.put_u8(0);
+        b.put_u8(0);
+        b.put_u8(0);
+        b.put_u8(0);
+        assert_eq!(MessageCodec{}.decode(&mut b).unwrap(), Some(MessageEvent::Pong(Peer::new(localhost_v6, false, None, None, None))));
     }
 
     #[test]

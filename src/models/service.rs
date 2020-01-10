@@ -1,18 +1,26 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
-
 use tokio::sync::mpsc;
+use crate::storage::Db;
+use crate::models::Peer;
 
 type Tx = mpsc::UnboundedSender<String>;
 pub type Rx = mpsc::UnboundedReceiver<String>;
 
 pub struct Service {
     pub peers: HashMap<SocketAddr, Tx>,
+    pub my_contact: Peer,
+    pub database: Db,
 }
 
 impl Service {
     pub fn new() -> Service {
-        Service { peers: HashMap::new() }
+        // TODO: handle file errors
+        Service {
+            peers: HashMap::new(),
+            my_contact: Peer::get_self(),
+            database: Db::new_from_file("/tmp/thing.bin"),
+        }
     }
 }
 

@@ -6,6 +6,7 @@ use std::str;
 use std::net::{
     SocketAddr,
     IpAddr,
+    Ipv6Addr,
 };
 use serde::{Deserialize, Serialize};
 use super::{
@@ -32,6 +33,17 @@ impl Peer {
             public_key,
             signature,
         }
+    }
+
+    pub fn get_self() -> Self {
+        // TODO: get ip address and port on init
+        let ip = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2)), 8000);
+        Peer::new(
+            ip,
+            false,
+            Some("TEST".into()),
+            None,
+            Some("ZYX987".into()))
     }
 
     pub fn to_bytes(&self) -> BytesMut {
