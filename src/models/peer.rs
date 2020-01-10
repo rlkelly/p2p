@@ -6,6 +6,7 @@ use std::str;
 use std::net::{
     SocketAddr,
     IpAddr,
+    Ipv6Addr,
 };
 use serde::{Deserialize, Serialize};
 use super::{
@@ -14,11 +15,9 @@ use super::{
     bytes_to_ip_addr,
 };
 
-const LENGTH_FIELD_LEN: usize = 4;
-
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Peer {
-    addr: SocketAddr,
+    pub address: SocketAddr,
     accept_incoming: bool,
     name: Option<String>,
     public_key: Option<String>,
@@ -26,9 +25,9 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(addr: SocketAddr, accept_incoming: bool, name: Option<String>, public_key: Option<String>, signature: Option<String>) -> Self {
+    pub fn new(address: SocketAddr, accept_incoming: bool, name: Option<String>, public_key: Option<String>, signature: Option<String>) -> Self {
         Peer {
-            addr,
+            address,
             accept_incoming,
             name,
             public_key,
@@ -36,16 +35,27 @@ impl Peer {
         }
     }
 
+    pub fn get_self() -> Self {
+        // TODO: get ip address and port on init
+        let ip = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2)), 8000);
+        Peer::new(
+            ip,
+            false,
+            Some("TEST".into()),
+            None,
+            Some("ZYX987".into()))
+    }
+
     pub fn to_bytes(&self) -> BytesMut {
         let mut buf = BytesMut::new();
-        let ip_bytes = match self.addr.ip() {
+        let ip_bytes = match self.address.ip() {
             IpAddr::V4(ip) => ip.octets().to_vec(),
             IpAddr::V6(ip) => ip.octets().to_vec(),
         };
         let len = ip_bytes.len();
         buf.put_u64(len as u64);
         buf.put(&ip_bytes[..]);
-        buf.put_u16(self.addr.port());
+        buf.put_u16(self.address.port());
 
         if self.accept_incoming {
             buf.put_u8(1);
@@ -80,7 +90,7 @@ impl Peer {
 
     pub fn from_bytes(buf: &mut BytesMut) -> Self {
         let _ip_len = take_u64(buf).unwrap();
-        let addr = bytes_to_ip_addr(buf);
+        let address = bytes_to_ip_addr(buf);
         let accept_incoming_byte = buf.split_to(1)[0] as u8;
         let accept_incoming = accept_incoming_byte == 1u8;
         let name_key = buf.split_to(1)[0] as usize;
@@ -90,7 +100,7 @@ impl Peer {
         let signature_key = buf.split_to(1)[0] as usize;
         let signature = get_nstring(buf, signature_key);
         Peer {
-            addr,
+            address,
             accept_incoming,
             name,
             public_key,
