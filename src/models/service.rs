@@ -25,7 +25,13 @@ impl Service {
         // TODO: handle file errors
         Service {
             peers: HashMap::new(),
-            my_contact: Peer::get_self(),
+            my_contact: Peer::new(
+                format!("127.0.0.1:{}", config.port).parse().unwrap(),
+                true,
+                Some(config.name),
+                None,
+                Some("ZYX987".into()),
+            ),
             database: Db::new_from_file(&config.config),
             storage_dir: config.music,
             counter: 0,

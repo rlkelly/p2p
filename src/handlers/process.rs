@@ -22,6 +22,11 @@ pub async fn process(
     let transport = Framed::new(stream, MessageCodec::new());
     let mut peer = PeerConnection::new(state.clone(), transport).await?;
 
+    {
+        let sstate = state.lock().await;
+        peer.send_message(MessageEvent::Pong(sstate.my_contact.clone())).await.unwrap();
+    }
+
     while let Some(result) = peer.next().await {
         match result {
             Ok(MessageEvent::Ping(peer_data)) => {
@@ -30,9 +35,16 @@ pub async fn process(
                 state.database.add_peer(peer_data, Collection::new(vec![]));
                 peer.send_message(MessageEvent::ArtistsRequest).await.unwrap();
             },
-            Ok(MessageEvent::Pong(peer_data)) => {
+            Ok(MessageEvent::Pong(mut peer_data)) => {
+                // TODO: how to handle connection different from server???
+                //       when a user connects to their initial peer, their ip address
+                //       will be different than their server address
                 let mut state = state.lock().await;
-                state.database.add_peer(peer_data, Collection::new(vec![]));
+                state.database.add_peer(peer_data.clone(), Collection::new(vec![]));
+
+                let conn_peer = peer_data.update_addr(addr);
+                state.database.add_peer(conn_peer, Collection::new(vec![]));
+
                 peer.send_message(MessageEvent::ArtistsRequest).await.unwrap();
             },
             Ok(MessageEvent::ArtistsRequest) => {
@@ -81,6 +93,7 @@ pub async fn process(
             //     state.broadcast(addr, &msg).await;
             // },
             Ok(MessageEvent::Ok) => {
+                println!("RECEIVED OK!");
                 let ss = state.lock().await;
                 println!("COUNTER: {:?}", ss.counter);
             },

@@ -68,11 +68,11 @@ impl Encoder for MessageCodec {
         match event {
             MessageEvent::Ping(peer) => {
                 buf.put_u8(PING);
-                buf.extend_from_slice(&peer.to_bytes()[..])
+                buf.extend_from_slice(&peer.to_bytes()[..]);
             },
             MessageEvent::Pong(peer) => {
                 buf.put_u8(PONG);
-                buf.extend_from_slice(&peer.to_bytes()[..])
+                buf.extend_from_slice(&peer.to_bytes()[..]);
             },
             MessageEvent::Payload(message) => {
                 buf.put_u8(PAYLOAD);
@@ -114,12 +114,14 @@ impl Encoder for MessageCodec {
                     buf.extend_from_slice(&bytes[..]);
                 };
             },
+            MessageEvent::Ok => {
+                buf.put_u8(OK);
+            },
             _ => println!("UNKNOWN!!!"),
         }
         Ok(())
     }
 }
-
 
 impl Decoder for MessageCodec {
     type Item = MessageEvent;
@@ -193,6 +195,7 @@ impl Decoder for MessageCodec {
                     return Ok(Some(MessageEvent::PeersResponse(peer_vec)));
                 },
                 OK => {
+                    println!("OK!");
                     return Ok(Some(MessageEvent::Ok))
                 },
                 _ => {}

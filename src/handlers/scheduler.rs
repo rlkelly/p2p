@@ -9,6 +9,13 @@ use crate::codec::MessageEvent;
 // TODO: drop peers after no response for some time
 // TODO: figure how to add new connections
 
+pub async fn run_scheduled_tasks(state: Arc<Mutex<Service>>) {
+    // let t = ping_all_peers(Arc::clone(&state));
+    // let t2 = peers_request(Arc::clone(&state));
+    // t.await;
+    // t2.await;
+}
+
 pub async fn ping_all_peers(state: Arc<Mutex<Service>>) {
     let mut state = state.lock().await;
     state.incr();

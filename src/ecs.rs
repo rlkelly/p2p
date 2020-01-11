@@ -56,6 +56,10 @@ impl<P> WorldState<P> {
         }
     }
 
+    pub fn all_addresses(&self) -> HashMap<SocketAddr, usize> {
+        self.addresses.clone()
+    }
+
     pub fn get_entity(&self, addr: &SocketAddr) -> Option<Entity> {
         if let Some(ix) = self.addresses.get(addr) {
             Some(self.sorted[*ix])

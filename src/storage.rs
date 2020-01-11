@@ -99,10 +99,14 @@ impl Db {
     }
 
     pub fn update_collection(&mut self, addr: &SocketAddr, c: Collection) {
-        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(addr).unwrap();
-        self.world.write_storage::<Collection>()
-            .insert(entity, c)
-            .unwrap();
+        match self.world.fetch::<WorldState<Peer>>().get_entity(addr) {
+            Some(entity) => {
+                self.world.write_storage::<Collection>()
+                    .insert(entity, c)
+                    .unwrap();
+            }
+            None => panic!("PEER DOESNT EXIST!")
+        };
     }
 
     pub fn get_collection(&mut self, addr: &SocketAddr) -> Collection {

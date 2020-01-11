@@ -1,12 +1,13 @@
 use std::sync::Arc;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use tokio::sync::Mutex;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::time;
 
 use music_snobster::handlers::{process, Service};
-use music_snobster::handlers::scheduler::ping_all_peers;
+use music_snobster::handlers::scheduler::run_scheduled_tasks;
 use music_snobster::args::get_args;
 use music_snobster::tui::run_tui;
 
@@ -22,6 +23,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(Mutex::new(Service::new(config.clone())));
     let mut listener = TcpListener::bind(format!("127.0.0.1:{}", config.port)).await?;
 
+    // process initial peer(s)
+    if let Some(initial_peer) = config.initial_peer {
+        let addr: SocketAddr = initial_peer.parse().expect("INVALID PEER");
+        let connection = TcpStream::connect(addr).await;
+        let state = Arc::clone(&state);
+
+        if let Ok(stream) = connection {
+            tokio::spawn(async move {
+                if let Err(e) = process(state, stream, addr).await {
+                    println!("an error occured; error = {:?}", e);
+                }
+            });
+        }
+    }
+
     // text interface
     if config.tui {
         let tui_state = Arc::clone(&state);
@@ -34,11 +50,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // regularly scheduled background tasks
     let scheduler_state = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(10_000));
+        let mut interval = time::interval(Duration::from_millis(3_000));
         loop {
             let ss = Arc::clone(&scheduler_state);
             interval.tick().await;
-            ping_all_peers(ss).await;
+            run_scheduled_tasks(ss).await;
         }
     });
 
