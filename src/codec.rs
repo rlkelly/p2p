@@ -12,13 +12,13 @@ use crate::models::{
 };
 use crate::consts::*;
 
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MessageEvent {
     Ping(Peer), // add user data
     Pong(Peer), // add user data
     Payload(String),
     Broadcast(String),
-    Received(String),
+    Received(BytesMut),
     RequestFile(ArtistData),
     ArtistsRequest,
     ArtistsResponse(Vec<ArtistData>),
@@ -81,11 +81,9 @@ impl Encoder for MessageCodec {
                 buf.put_u64(bytes.clone().len() as u64);
                 buf.put(bytes);
             },
-            MessageEvent::Received(message) => {
-                buf.put_u8(RECEIVED);
-                let bytes = message.as_bytes();
-                buf.put_u64(bytes.clone().len() as u64);
-                buf.put(bytes);
+            MessageEvent::Received(bytes) => {
+                // TODO: validate this?
+                buf.put(bytes)
             },
             MessageEvent::RequestFile(artist_data) => {
                 buf.put_u8(REQUEST_FILE);
@@ -143,6 +141,7 @@ impl Decoder for MessageCodec {
             // TODO: validate data length
             match byte {
                 PING => {
+                    println!("PING!");
                     let peer = Peer::from_bytes(src);
                     return Ok(Some(MessageEvent::Ping(peer)));
                 },
@@ -155,11 +154,11 @@ impl Decoder for MessageCodec {
                     let message = get_nstring(src, data_len).unwrap();
                     return Ok(Some(MessageEvent::Payload(message)));
                 },
-                RECEIVED => {
-                    let data_len = take_u64(src).unwrap() as usize;
-                    let message = get_nstring(src, data_len).unwrap();
-                    return Ok(Some(MessageEvent::Received(message)));
-                },
+                // RECEIVED => {
+                //     let data_len = take_u64(src).unwrap() as usize;
+                //     let message = get_nstring(src, data_len).unwrap();
+                //     return Ok(Some(MessageEvent::Received(message)));
+                // },
                 REQUEST_FILE => {
                     return Ok(Some(MessageEvent::RequestFile(
                         ArtistData::from_bytes(src)
@@ -205,6 +204,9 @@ impl Decoder for MessageCodec {
                     }
 
                     return Ok(Some(MessageEvent::PeersResponse(peer_vec)));
+                },
+                OK => {
+                    return Ok(Some(MessageEvent::Ok))
                 },
                 _ => {}
             }

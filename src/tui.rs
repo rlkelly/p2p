@@ -1,9 +1,11 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
+
 use cursive::Cursive;
 use cursive::traits::*;
 use cursive::align::HAlign;
 use cursive::views::{BoxView, Dialog, SelectView};
+
+use tokio::sync::Mutex;
 
 pub use crate::models::{ArtistData, Peer, Service};
 
@@ -127,9 +129,9 @@ fn show_tracks(s: &mut Cursive, artist_name: &str, album_title: &str, collection
         }
     }
     select.add_all_str(content.lines());
-    let box_select = BoxView::with_fixed_size((30, 10), select);
+    let box_select = BoxView::with_fixed_size((30, 10), select.scrollable());
     s.add_layer(
-        Dialog::around(box_select.scrollable())
+        Dialog::around(box_select)
             .title(album_title)
             .button("Back", |s| {s.pop_layer();}),
     );

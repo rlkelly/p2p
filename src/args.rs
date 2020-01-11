@@ -6,6 +6,8 @@ pub struct Config {
     pub config: String,
     pub peers: String,
     pub music: String,
+    pub initial_peer: String,
+    pub tui: bool,
 }
 
 impl Config {
@@ -15,6 +17,8 @@ impl Config {
             config: config.to_string(),
             peers: peers.to_string(),
             music: music.to_string(),
+            initial_peer: "127.0.0.1:8081".to_string(),
+            tui: false,
         }
     }
 }

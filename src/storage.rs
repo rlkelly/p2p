@@ -71,7 +71,6 @@ impl Db {
 
     pub fn add_tracks(&mut self, addr: &SocketAddr, album_data: AlbumData) {
         let mut collection = self.get_collection(addr);
-        println!("{:?}", collection);
         let artist_name = album_data.clone().artist.unwrap();
         let album_title = album_data.clone().album_title;
 
@@ -122,6 +121,9 @@ impl Db {
         let mut f = File::open(filename).unwrap();
         let mut buffer = Vec::new();
         f.read_to_end(&mut buffer).unwrap();
+        if buffer.len() == 0 {
+            return db;
+        }
         let mut bytes = BytesMut::new();
         bytes.extend_from_slice(&buffer[..]);
         let mut peers_length = bytes.split_to(1)[0] as u8;
