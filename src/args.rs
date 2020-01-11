@@ -1,5 +1,7 @@
 use clap::{App, Arg};
 
+// TODO: pass initial peers list comma separated
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub port: u16,

@@ -132,8 +132,9 @@ impl Decoder for MessageCodec {
                 return Ok(None);
             }
 
-            let byte = src.split_to(1)[0];
             // TODO: validate data length
+            let byte = src.split_to(1)[0];
+
             match byte {
                 PING => {
                     let peer = Peer::from_bytes(src);
@@ -148,11 +149,6 @@ impl Decoder for MessageCodec {
                     let message = get_nstring(src, data_len).unwrap();
                     return Ok(Some(MessageEvent::Payload(message)));
                 },
-                // RECEIVED => {
-                //     let data_len = take_u64(src).unwrap() as usize;
-                //     let message = get_nstring(src, data_len).unwrap();
-                //     return Ok(Some(MessageEvent::Received(message)));
-                // },
                 REQUEST_FILE => {
                     return Ok(Some(MessageEvent::RequestFile(
                         ArtistData::from_bytes(src)
@@ -162,7 +158,6 @@ impl Decoder for MessageCodec {
                     return Ok(Some(MessageEvent::ArtistsRequest));
                 },
                 ARTISTS_RESPONSE => {
-                    // ArtistsResponse(Vec<ArtistData>),
                     let mut artist_count = take_u64(src).unwrap() as usize;
                     let mut artist_vec: Vec<ArtistData> = vec![];
                     while artist_count > 0 {
@@ -173,13 +168,11 @@ impl Decoder for MessageCodec {
                     return Ok(Some(MessageEvent::ArtistsResponse(artist_vec)));
                 },
                 ALBUM_REQUEST => {
-                    // AlbumRequest(ArtistData),
                     return Ok(Some(MessageEvent::AlbumRequest(
                         AlbumData::from_bytes(src)
                     )));
                 },
                 ALBUM_RESPONSE => {
-                    // AlbumResponse(Vec<TrackData>),
                     return Ok(Some(MessageEvent::AlbumRequest(
                         AlbumData::from_bytes(src)
                     )));

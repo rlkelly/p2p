@@ -6,9 +6,10 @@ use tokio::sync::Mutex;
 use crate::models::{Peer, Service};
 use crate::codec::MessageEvent;
 
+// TODO: drop peers after no response for some time
+// TODO: figure how to add new connections
+
 pub async fn ping_all_peers(state: Arc<Mutex<Service>>) {
-    // TODO:
-    // update peers list
     let mut state = state.lock().await;
     state.incr();
 
@@ -16,5 +17,12 @@ pub async fn ping_all_peers(state: Arc<Mutex<Service>>) {
     let me = Peer::new(server, false, Some("MyName".into()), None, Some("ZYX987".into()));
     for peer in state.peers.iter_mut() {
         peer.1.send(MessageEvent::Ping(me.clone())).unwrap();
+    }
+}
+
+pub async fn peers_request(state: Arc<Mutex<Service>>) {
+    let mut state = state.lock().await;
+    for peer in state.peers.iter_mut() {
+        peer.1.send(MessageEvent::PeersRequest).unwrap();
     }
 }

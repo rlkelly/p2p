@@ -35,15 +35,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scheduler_state = Arc::clone(&state);
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_millis(10_000));
-        let sstate = Arc::clone(&scheduler_state);
         loop {
-            let ss = Arc::clone(&sstate);
+            let ss = Arc::clone(&scheduler_state);
             interval.tick().await;
             ping_all_peers(ss).await;
         }
     });
 
     // process incoming requests
+    // add support for outgoing requests also, ie.
+    // let mut stream = TcpStream::connect("127.0.0.1:34254")?;
     loop {
         let (stream, addr) = listener.accept().await?;
         let state = Arc::clone(&state);
