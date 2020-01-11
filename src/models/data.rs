@@ -163,7 +163,7 @@ impl AlbumData {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct TrackData {
-    title: String,
+    pub title: String,
     bitrate: u16,
     length: u8,
 }

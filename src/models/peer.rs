@@ -19,7 +19,7 @@ use super::{
 pub struct Peer {
     pub address: SocketAddr,
     accept_incoming: bool,
-    name: Option<String>,
+    pub name: Option<String>,
     public_key: Option<String>,
     signature: Option<String>, // sign to prove they have private key
 }

@@ -1,11 +1,13 @@
 use clap::{App, Arg};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub port: u16,
-    config: String,
-    peers: String,
-    music: String,
+    pub config: String,
+    pub peers: String,
+    pub music: String,
+    pub initial_peer: String,
+    pub tui: bool,
 }
 
 impl Config {
@@ -15,6 +17,8 @@ impl Config {
             config: config.to_string(),
             peers: peers.to_string(),
             music: music.to_string(),
+            initial_peer: "127.0.0.1:8081".to_string(),
+            tui: false,
         }
     }
 }
@@ -49,8 +53,8 @@ pub fn get_args() -> Config {
 
     Config::new(
         value_t!(matches, "port", u16).unwrap_or(8081u16),
-        matches.value_of("config").unwrap_or("/tmp/config.yaml"),
-        matches.value_of("peers").unwrap_or("/tmp/peers.yaml"),
-        matches.value_of("music").unwrap_or("~/Documents/music"),
+        matches.value_of("config").unwrap_or("/tmp/thing.bin"),
+        matches.value_of("peers").unwrap_or("/tmp/peers.bin"),
+        matches.value_of("music").unwrap_or("/Users/user2/Documents/music"),
     )
 }

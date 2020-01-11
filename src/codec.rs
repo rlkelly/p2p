@@ -18,7 +18,6 @@ pub enum MessageEvent {
     Pong(Peer), // add user data
     Payload(String),
     Broadcast(String),
-    Received(String),
     RequestFile(ArtistData),
     ArtistsRequest,
     ArtistsResponse(Vec<ArtistData>),
@@ -77,12 +76,6 @@ impl Encoder for MessageCodec {
             },
             MessageEvent::Payload(message) => {
                 buf.put_u8(PAYLOAD);
-                let bytes = message.as_bytes();
-                buf.put_u64(bytes.clone().len() as u64);
-                buf.put(bytes);
-            },
-            MessageEvent::Received(message) => {
-                buf.put_u8(RECEIVED);
                 let bytes = message.as_bytes();
                 buf.put_u64(bytes.clone().len() as u64);
                 buf.put(bytes);
@@ -155,11 +148,11 @@ impl Decoder for MessageCodec {
                     let message = get_nstring(src, data_len).unwrap();
                     return Ok(Some(MessageEvent::Payload(message)));
                 },
-                RECEIVED => {
-                    let data_len = take_u64(src).unwrap() as usize;
-                    let message = get_nstring(src, data_len).unwrap();
-                    return Ok(Some(MessageEvent::Received(message)));
-                },
+                // RECEIVED => {
+                //     let data_len = take_u64(src).unwrap() as usize;
+                //     let message = get_nstring(src, data_len).unwrap();
+                //     return Ok(Some(MessageEvent::Received(message)));
+                // },
                 REQUEST_FILE => {
                     return Ok(Some(MessageEvent::RequestFile(
                         ArtistData::from_bytes(src)
@@ -205,6 +198,9 @@ impl Decoder for MessageCodec {
                     }
 
                     return Ok(Some(MessageEvent::PeersResponse(peer_vec)));
+                },
+                OK => {
+                    return Ok(Some(MessageEvent::Ok))
                 },
                 _ => {}
             }
