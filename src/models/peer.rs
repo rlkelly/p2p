@@ -91,7 +91,6 @@ impl Peer {
     pub fn from_bytes(buf: &mut BytesMut) -> Self {
         let _ip_len = take_u64(buf).unwrap();
         let address = bytes_to_ip_addr(buf);
-        println!("add: {:?}", address);
         let accept_incoming_byte = buf.split_to(1)[0] as u8;
         let accept_incoming = accept_incoming_byte == 1u8;
         let name_key = buf.split_to(1)[0] as usize;

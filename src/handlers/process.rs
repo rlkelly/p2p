@@ -71,19 +71,15 @@ pub async fn process(
                 let mut state = state.lock().await;
                 state.database.add_peers(peers_list);
             },
-            Ok(MessageEvent::Received(mut msg)) => {
-                use tokio_util::codec::{Decoder, Encoder};
-                let res = MessageCodec{}.decode(&mut msg).unwrap().unwrap();
-                peer.send_message(res).await.unwrap();
-            },
-            Ok(MessageEvent::Broadcast(msg)) => {
-                let mut state = state.lock().await;
-                state.broadcast(addr, &msg).await;
-            },
-            Ok(MessageEvent::Payload(msg)) => {
-                let mut state = state.lock().await;
-                state.broadcast(addr, &msg).await;
-            },
+            // TODO: perhaps a broadcast would be useful?
+            // Ok(MessageEvent::Broadcast(msg)) => {
+            //     let mut state = state.lock().await;
+            //     state.broadcast(addr, &msg).await;
+            // },
+            // Ok(MessageEvent::Payload(msg)) => {
+            //     let mut state = state.lock().await;
+            //     state.broadcast(addr, &msg).await;
+            // },
             Ok(MessageEvent::Ok) => {
                 let ss = state.lock().await;
                 println!("COUNTER: {:?}", ss.counter);

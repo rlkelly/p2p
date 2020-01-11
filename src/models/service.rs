@@ -1,15 +1,15 @@
-use bytes::BytesMut;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
 use crate::storage::Db;
 use crate::models::{ArtistData, Peer};
+use crate::codec::MessageEvent;
 use crate::organizer::get_collection;
 use crate::args::Config;
 
-type Tx = mpsc::UnboundedSender<BytesMut>;
-pub type Rx = mpsc::UnboundedReceiver<BytesMut>;
+type Tx = mpsc::UnboundedSender<MessageEvent>;
+pub type Rx = mpsc::UnboundedReceiver<MessageEvent>;
 
 pub struct Service {
     pub peers: HashMap<SocketAddr, Tx>,
@@ -47,12 +47,9 @@ impl Service {
 }
 
 impl Service {
-    pub async fn broadcast(&mut self, sender: SocketAddr, message: &str) {
+    pub async fn broadcast(&mut self, message: &MessageEvent) {
         for peer in self.peers.iter_mut() {
-            // TODO: this is prob not necessary anymore
-            // if *peer.0 != sender {
-            //     let _ = peer.1.send(message.as_bytes());
-            // }
+            let _ = peer.1.send(message.clone());
         }
     }
 }

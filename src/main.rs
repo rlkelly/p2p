@@ -5,7 +5,8 @@ use tokio::sync::Mutex;
 use tokio::net::TcpListener;
 use tokio::time;
 
-use music_snobster::handlers::{process, scheduler, Service};
+use music_snobster::handlers::{process, Service};
+use music_snobster::handlers::scheduler::ping_all_peers;
 use music_snobster::args::get_args;
 use music_snobster::tui::run_tui;
 
@@ -33,12 +34,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // regularly scheduled background tasks
     let scheduler_state = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(2000));
+        let mut interval = time::interval(Duration::from_millis(10_000));
         let sstate = Arc::clone(&scheduler_state);
         loop {
             let ss = Arc::clone(&sstate);
             interval.tick().await;
-            scheduler(ss).await;
+            ping_all_peers(ss).await;
         }
     });
 

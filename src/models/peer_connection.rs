@@ -55,7 +55,7 @@ impl Stream for PeerConnection {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Poll::Ready(Some(v)) = Pin::new(&mut self.rx).poll_next(cx) {
-            return Poll::Ready(Some(Ok(MessageEvent::Received(v))));
+            return Poll::Ready(Some(Ok(v)));
         }
 
         let result: Option<_> = futures::ready!(Pin::new(&mut self.messages).poll_next(cx));

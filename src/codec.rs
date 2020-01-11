@@ -12,13 +12,12 @@ use crate::models::{
 };
 use crate::consts::*;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum MessageEvent {
     Ping(Peer), // add user data
     Pong(Peer), // add user data
     Payload(String),
     Broadcast(String),
-    Received(BytesMut),
     RequestFile(ArtistData),
     ArtistsRequest,
     ArtistsResponse(Vec<ArtistData>),
@@ -81,10 +80,6 @@ impl Encoder for MessageCodec {
                 buf.put_u64(bytes.clone().len() as u64);
                 buf.put(bytes);
             },
-            MessageEvent::Received(bytes) => {
-                // TODO: validate this?
-                buf.put(bytes)
-            },
             MessageEvent::RequestFile(artist_data) => {
                 buf.put_u8(REQUEST_FILE);
                 buf.extend_from_slice(&artist_data.to_bytes()[..])
@@ -141,7 +136,6 @@ impl Decoder for MessageCodec {
             // TODO: validate data length
             match byte {
                 PING => {
-                    println!("PING!");
                     let peer = Peer::from_bytes(src);
                     return Ok(Some(MessageEvent::Ping(peer)));
                 },
