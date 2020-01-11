@@ -20,12 +20,14 @@ use music_snobster::tui::run_tui;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = get_args();
     println!("{:?}", config);
-    let state = Arc::new(Mutex::new(Service::new()));
+    let state = Arc::new(Mutex::new(Service::new(config.clone())));
     let mut listener = TcpListener::bind(format!("127.0.0.1:{}", config.port)).await?;
 
     // listen for local commands
     let tui_state = Arc::clone(&state);
     tokio::spawn(async move {
+        // let state = tui_state.lock().await;
+        // println!("{:?}", state.get_peers());
         run_tui(tui_state);
         std::process::exit(0);
         // loop {

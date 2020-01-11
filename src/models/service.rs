@@ -4,6 +4,7 @@ use tokio::sync::mpsc;
 use crate::storage::Db;
 use crate::models::{ArtistData, Peer};
 use crate::organizer::get_collection;
+use crate::args::Config;
 
 type Tx = mpsc::UnboundedSender<String>;
 pub type Rx = mpsc::UnboundedReceiver<String>;
@@ -16,18 +17,22 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new() -> Service {
+    pub fn new(config: Config) -> Service {
         // TODO: handle file errors
         Service {
             peers: HashMap::new(),
             my_contact: Peer::get_self(),
-            database: Db::new_from_file("/tmp/thing.bin"),
-            storage_dir: "/Users/user2/Documents/music".into(),
+            database: Db::new_from_file(&config.config),
+            storage_dir: config.music,
         }
     }
 
     pub fn get_collection(&self, track_data: bool, artist_filter: Option<&str>, album_filter: Option<&str>) -> Vec<ArtistData> {
         get_collection(&self.storage_dir, track_data, artist_filter, album_filter)
+    }
+
+    pub fn get_peers(&self) -> Vec<Peer> {
+        self.database.all_peers()
     }
 }
 
