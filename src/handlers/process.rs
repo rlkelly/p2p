@@ -24,32 +24,36 @@ pub async fn process(
 
     {
         let sstate = state.lock().await;
-        peer.send_message(MessageEvent::Pong(sstate.my_contact.clone())).await.unwrap();
+        peer.send_message(MessageEvent::Ping(sstate.my_contact.clone())).await.unwrap();
     }
 
+    // // todo: better comparison
+    // if addr.ip().to_string() == "::1" {
+    //     return Ok(());
+    // }
+    //
     while let Some(result) = peer.next().await {
         match result {
             Ok(MessageEvent::Ping(peer_data)) => {
                 let mut state = state.lock().await;
-                peer.send_message(MessageEvent::Pong(state.my_contact.clone())).await.unwrap();
-                state.database.add_peer(peer_data.clone(), Collection::new(vec![]));
-                state.database.insert_address(&addr, peer_data);
-                peer.send_message(MessageEvent::ArtistsRequest).await.unwrap();
+                peer.send_message(MessageEvent::Pong(state.my_contact.clone())).await.expect("FAILED PONG");
+                state.add_peer(peer_data.clone(), Collection::new(vec![]), &addr);
+                peer.send_message(MessageEvent::ArtistsRequest).await.expect("FAILED ARTIST REQUEST");
             },
             Ok(MessageEvent::Pong(peer_data)) => {
                 // TODO: how to handle connection different from server???
                 //       when a user connects to their initial peer, their ip address
                 //       will be different than their server address
+
                 let mut state = state.lock().await;
-                state.database.add_peer(peer_data.clone(), Collection::new(vec![]));
-                state.database.insert_address(&addr, peer_data);
-                peer.send_message(MessageEvent::ArtistsRequest).await.unwrap();
+                state.add_peer(peer_data.clone(), Collection::new(vec![]), &addr);
+                peer.send_message(MessageEvent::ArtistsRequest).await.expect("FAILED ARTIST REQUEST");
             },
             Ok(MessageEvent::ArtistsRequest) => {
                 let state = state.lock().await;
                 peer.send_message(MessageEvent::ArtistsResponse(
                     state.get_collection(false, None, None))
-                ).await.unwrap();
+                ).await.expect("Artists Response Send Fail");
             },
             Ok(MessageEvent::ArtistsResponse(artist_data)) => {
                 let mut state = state.lock().await;
@@ -63,7 +67,7 @@ pub async fn process(
                             false, album.artist.as_deref(),
                             Some(&album.album_title),
                     ))
-                ).await.unwrap();
+                ).await.expect("Artist Response Send Fail");
             },
             Ok(MessageEvent::AlbumResponse(album_data)) => {
                 let mut state = state.lock().await;
@@ -75,26 +79,18 @@ pub async fn process(
                     MessageEvent::PeersResponse(
                         state.database.all_peers()
                     )
-                ).await.unwrap();
+                ).await.expect("Peers Request Fail");
             },
             Ok(MessageEvent::PeersResponse(peers_list)) => {
                 let mut state = state.lock().await;
-                state.database.add_peers(peers_list);
+                state.add_peers(peers_list);
             },
-            // TODO: perhaps a broadcast would be useful?
-            // Ok(MessageEvent::Broadcast(msg)) => {
-            //     let mut state = state.lock().await;
-            //     state.broadcast(addr, &msg).await;
-            // },
-            // Ok(MessageEvent::Payload(msg)) => {
-            //     let mut state = state.lock().await;
-            //     state.broadcast(addr, &msg).await;
-            // },
-            Ok(MessageEvent::Ok) => {
-                println!("RECEIVED OK!");
-                let ss = state.lock().await;
-                println!("COUNTER: {:?}", ss.counter);
+            Ok(MessageEvent::DownloadRequest(_album)) => {
+                // TODO: get album files
+                //       send chunks
+                //       other user assembles chunks
             },
+            Ok(MessageEvent::Ok) => (),
             Err(e) => {
                 println!(
                     "an error occured while processing messages; error = {:?}", e

@@ -9,4 +9,5 @@ pub const ALBUM_RESPONSE: u8     = 0xF7;
 pub const ARTISTS_RESPONSE: u8   = 0xF8;
 pub const PEERS_REQUEST: u8      = 0xF9;
 pub const PEERS_RESPONSE: u8     = 0xFA;
-pub const OK: u8                 = 0xFB;
+pub const DOWNLOAD_REQUEST: u8   = 0xFB;
+pub const OK: u8                 = 0xFC;

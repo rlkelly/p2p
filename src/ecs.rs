@@ -65,6 +65,10 @@ impl<P> WorldState<P> {
         self.addresses.insert(*addr, ix);
     }
 
+    pub fn remove_address(&mut self, addr: &SocketAddr) {
+        self.addresses.remove(addr);
+    }
+
     pub fn get_entity(&self, addr: &SocketAddr) -> Option<Entity> {
         if let Some(ix) = self.addresses.get(addr) {
             Some(self.sorted[*ix])

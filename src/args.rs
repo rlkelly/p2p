@@ -64,24 +64,20 @@ pub fn get_args() -> Config {
         .arg(Arg::with_name("initial_peer")
             .short("f")
             .long("friends")
-            // .value_name("FILE")
             .help("initial peers")
             .takes_value(true))
         .arg(Arg::with_name("name")
             .short("n")
             .long("name")
-            // .value_name("FILE")
             .help("username")
             .takes_value(true))
         .arg(Arg::with_name("tui")
             .short("t")
             .long("text_interface")
-            // .value_name("FILE")
             .help("text interface boolean")
             .takes_value(false))
         .get_matches();
 
-    println!("{:?}", matches.is_present("tui"));
     Config::new(
         value_t!(matches, "port", u16).unwrap_or(8081u16),
         matches.value_of("config").unwrap_or("/tmp/thing.bin"),

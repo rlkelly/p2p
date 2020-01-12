@@ -11,7 +11,6 @@ use music_snobster::handlers::scheduler::run_scheduled_tasks;
 use music_snobster::args::get_args;
 use music_snobster::ui::tui::run_tui;
 
-
 // TODO: handle requests
 //   - SEND FILE
 //   - REQUEST FILE

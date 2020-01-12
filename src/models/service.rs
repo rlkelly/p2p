@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
 use crate::storage::Db;
-use crate::models::{ArtistData, Peer};
+use crate::models::{ArtistData, Collection, Peer};
 use crate::codec::MessageEvent;
 use crate::organizer::get_collection;
 use crate::args::Config;
@@ -45,6 +45,23 @@ impl Service {
 
     pub fn get_peers(&self) -> Vec<Peer> {
         self.database.all_peers()
+    }
+
+    pub fn add_peers(&mut self, peers: Vec<Peer>) {
+        for peer in peers {
+            if peer == self.my_contact {
+                continue;
+            }
+            self.database.add_peer(peer, Collection::new(vec![]));
+        }
+    }
+
+    pub fn add_peer(&mut self, p: Peer, c: Collection, addr: &SocketAddr) {
+        if addr == &self.my_contact.address || p == self.my_contact {
+            return;
+        }
+        self.database.add_peer(p.clone(), c);
+        self.database.insert_address(&addr, p);
     }
 
     pub fn incr(&mut self) {

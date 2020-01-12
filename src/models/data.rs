@@ -163,6 +163,8 @@ impl AlbumData {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct TrackData {
+    pub artist: Option<String>,
+    pub album: Option<String>,
     pub title: String,
     bitrate: u16,
     length: u8,
@@ -171,6 +173,8 @@ pub struct TrackData {
 impl TrackData {
     pub fn new(title: String, bitrate: u16, length: u8) -> TrackData {
         TrackData {
+            artist: None,
+            album: None,
             title,
             bitrate,
             length,

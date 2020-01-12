@@ -25,6 +25,7 @@ pub enum MessageEvent {
     AlbumResponse(AlbumData),
     PeersRequest,
     PeersResponse(Vec<Peer>),
+    DownloadRequest(AlbumData),
     Err(MessageCodecError),
     Ok,
 }
@@ -71,8 +72,9 @@ impl Encoder for MessageCodec {
   type Item = MessageEvent;
   type Error = MessageCodecError;
 
-  fn encode(&mut self, event: Self::Item, buf: &mut BytesMut) ->
+  fn encode(&mut self, event: Self::Item, src: &mut BytesMut) ->
     Result<(), Self::Error> {
+        let mut buf = BytesMut::new();
         match event {
             MessageEvent::Ping(peer) => {
                 buf.put_u8(PING);
@@ -122,11 +124,17 @@ impl Encoder for MessageCodec {
                     buf.extend_from_slice(&bytes[..]);
                 };
             },
+            MessageEvent::DownloadRequest(album) => {
+                buf.put_u8(DOWNLOAD_REQUEST);
+                buf.extend_from_slice(&mut album.to_bytes()[..]);
+            },
             MessageEvent::Ok => {
                 buf.put_u8(OK);
             },
             _ => println!("UNKNOWN!!!"),
         }
+        src.put_u64(buf.len() as u64);
+        src.extend_from_slice(&buf[..]);
         Ok(())
     }
 }
@@ -141,37 +149,39 @@ impl Decoder for MessageCodec {
             if len == 0 {
                 return Ok(None);
             }
+            let bytes_len = take_u64(src).expect("invalid message");
+            let data = &mut src.split_to(bytes_len as usize);
 
             // TODO: validate data length
-            let byte = src.split_to(1)[0];
+            let byte = data.split_to(1)[0];
 
             match byte {
                 PING => {
-                    let peer = Peer::from_bytes(src);
+                    let peer = Peer::from_bytes(data);
                     return Ok(Some(MessageEvent::Ping(peer)));
                 },
                 PONG => {
-                    let peer = Peer::from_bytes(src);
+                    let peer = Peer::from_bytes(data);
                     return Ok(Some(MessageEvent::Pong(peer)));
                 },
                 PAYLOAD => {
-                    let data_len = take_u64(src).unwrap() as usize;
-                    let message = get_nstring(src, data_len).unwrap();
+                    let data_len = take_u64(data).unwrap() as usize;
+                    let message = get_nstring(data, data_len).unwrap();
                     return Ok(Some(MessageEvent::Payload(message)));
                 },
                 REQUEST_FILE => {
                     return Ok(Some(MessageEvent::RequestFile(
-                        ArtistData::from_bytes(src)
+                        ArtistData::from_bytes(data)
                     )));
                 },
                 ARTISTS_REQUEST => {
                     return Ok(Some(MessageEvent::ArtistsRequest));
                 },
                 ARTISTS_RESPONSE => {
-                    let mut artist_count = take_u64(src).unwrap() as usize;
+                    let mut artist_count = take_u64(data).unwrap() as usize;
                     let mut artist_vec: Vec<ArtistData> = vec![];
                     while artist_count > 0 {
-                        let artist = ArtistData::from_bytes(src);
+                        let artist = ArtistData::from_bytes(data);
                         artist_vec.push(artist);
                         artist_count -= 1;
                     }
@@ -179,12 +189,12 @@ impl Decoder for MessageCodec {
                 },
                 ALBUM_REQUEST => {
                     return Ok(Some(MessageEvent::AlbumRequest(
-                        AlbumData::from_bytes(src)
+                        AlbumData::from_bytes(data)
                     )));
                 },
                 ALBUM_RESPONSE => {
                     return Ok(Some(MessageEvent::AlbumRequest(
-                        AlbumData::from_bytes(src)
+                        AlbumData::from_bytes(data)
                     )));
                 },
                 PEERS_REQUEST => {
@@ -192,15 +202,22 @@ impl Decoder for MessageCodec {
                 },
                 PEERS_RESPONSE => {
                     // TODO: parse vector into bytes
-                    let mut peer_count = take_u64(src).unwrap() as usize;
+                    let mut peer_count = take_u64(data).unwrap() as usize;
                     let mut peer_vec: Vec<Peer> = vec![];
                     while peer_count > 0 {
-                        let peer: Peer = Peer::from_bytes(src);
+                        // TODO: take len
+                        let _len = take_u64(data);
+                        let peer: Peer = Peer::from_bytes(data);
                         peer_vec.push(peer);
                         peer_count -= 1;
                     }
 
                     return Ok(Some(MessageEvent::PeersResponse(peer_vec)));
+                },
+                DOWNLOAD_REQUEST => {
+                    return Ok(Some(MessageEvent::DownloadRequest(
+                        AlbumData::from_bytes(data)
+                    )));
                 },
                 OK => {
                     println!("OK!");
@@ -249,8 +266,9 @@ mod tests {
     fn test_encode_ping() {
         let localhost_v6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
         let mut b = BytesMut::new();
+        b.put_u64(31);
         b.put_u8(PING);
-        b.put_u64(18);
+        b.put_u64(16);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
         b.put_u8(0);
@@ -264,8 +282,9 @@ mod tests {
     fn test_encode_pong() {
         let localhost_v6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
         let mut b = BytesMut::new();
+        b.put_u64(31);
         b.put_u8(PONG);
-        b.put_u64(18);
+        b.put_u64(16);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
         b.put_u8(0);
@@ -278,6 +297,7 @@ mod tests {
     #[test]
     fn test_encode_payload() {
         let mut b = BytesMut::new();
+        b.put_u64(21);
         b.put_u8(PAYLOAD);
         b.put_u64(12);
         b.put(&b"hello world\0"[..]);
@@ -287,6 +307,7 @@ mod tests {
         MessageCodec{}.encode(MessageEvent::Payload(String::from("hello world\0")), &mut res).unwrap();
 
         let mut b = BytesMut::new();
+        b.put_u64(21);
         b.put_u8(PAYLOAD);
         b.put_u64(12);
         b.put(&b"hello world\0"[..]);

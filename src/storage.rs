@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use crate::models::{AlbumData, ArtistData, Collection, Peer};
 use crate::ecs::{
     Node,
+    // NodeEvent,
     NodeSystem,
     WorldState,
 };
@@ -53,7 +54,7 @@ impl Db {
     }
 
     pub fn insert_address(&mut self, addr: &SocketAddr, peer: Peer) {
-        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(&peer.address).unwrap();
+        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(&peer.address).expect("FAILED GET ENTITY");
         self.world.fetch_mut::<WorldState<Peer>>().insert_address(&addr, entity);
         self.maintain();
     }
@@ -63,6 +64,7 @@ impl Db {
     }
 
     pub fn add_peer(&mut self, p: Peer, c: Collection) {
+        // // todo: better comparison
         if None == self.world.fetch::<WorldState<Peer>>().get_entity(&p.address) {
             self.world.create_entity().with(p).with(c).build();
             self.maintain();
@@ -72,7 +74,7 @@ impl Db {
     pub fn add_peers(&mut self, peers: Vec<Peer>) {
         for peer in peers {
             let collection = self.get_collection(&peer.addr());
-            self.world.create_entity().with(peer).with(collection).build();
+            self.add_peer(peer, collection);
         }
         self.maintain()
     }
@@ -117,6 +119,15 @@ impl Db {
                 panic!("PEER DOESNT EXIST!")
             }
         };
+    }
+
+    pub fn delete_entity(&mut self, addr: &SocketAddr) {
+        let entity_result = self.world.fetch::<WorldState<Peer>>().get_entity(addr);
+        if let Some(entity) = entity_result {
+            self.world.delete_entity(entity).expect("entity deletion failed");
+        }
+        self.world.fetch_mut::<WorldState<Peer>>().remove_address(&addr);
+        self.maintain();
     }
 
     pub fn get_collection(&mut self, addr: &SocketAddr) -> Collection {
