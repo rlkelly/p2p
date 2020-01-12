@@ -29,6 +29,14 @@ pub enum MessageEvent {
     Ok,
 }
 
+// // TODO: I think this will make it clearer who is sending
+// pub struct MessageBody {
+//     message: MessageEvent,
+//     // name: String,
+//     pub_key: String,
+//     signature: String,
+// }
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum MessageCodecError {
     SerializationError,

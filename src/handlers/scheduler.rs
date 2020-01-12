@@ -10,9 +10,9 @@ use crate::codec::MessageEvent;
 // TODO: figure how to add new connections
 
 pub async fn run_scheduled_tasks(state: Arc<Mutex<Service>>) {
-    // let t = ping_all_peers(Arc::clone(&state));
+    let t = ping_all_peers(Arc::clone(&state));
     // let t2 = peers_request(Arc::clone(&state));
-    // t.await;
+    t.await;
     // t2.await;
 }
 

@@ -60,6 +60,11 @@ impl<P> WorldState<P> {
         self.addresses.clone()
     }
 
+    pub fn insert_address(&mut self, addr: &SocketAddr, entity: Entity) {
+        let ix = self.entities[&entity.id()];
+        self.addresses.insert(*addr, ix);
+    }
+
     pub fn get_entity(&self, addr: &SocketAddr) -> Option<Entity> {
         if let Some(ix) = self.addresses.get(addr) {
             Some(self.sorted[*ix])

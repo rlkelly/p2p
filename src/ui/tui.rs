@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use cursive::Cursive;
@@ -44,20 +45,16 @@ fn select_submenu(s: &mut Cursive, m: &str, state: Arc<Mutex<Service>>) {
 }
 
 fn show_peers(s: &mut Cursive, peers: Vec<Peer>, state: Arc<Mutex<Service>>) {
-    let mut select = SelectView::new()
+    let mut select = SelectView::<Peer>::new()
         .h_align(HAlign::Center)
         .autojump();
-    let mut content = String::new();
-    for peer in &peers {
-        // content.push_str(peer.name.as_ref().unwrap_or(&"unk".to_string()));
-        content.push_str(&format!("{:?}", peer.address));
-        content.push_str("\n");
+    for peer in peers {
+        select.add_item(&peer.address.to_string(), peer);
     }
-    select.add_all_str(content.lines());
     // TODO: get collection for peer
-    select.set_on_submit(move |s, address| {
-        let collection = futures::executor::block_on(get_peer_collection(address, Arc::clone(&state)));
-        show_albums(s, address, collection)
+    select.set_on_submit(move |s, peer| {
+        let collection = futures::executor::block_on(get_peer_collection(&peer.address, Arc::clone(&state)));
+        show_collection(s, collection);
     });
     s.add_layer(
         Dialog::around(select.scrollable().fixed_size((20, 10)))
@@ -100,6 +97,7 @@ fn show_albums(s: &mut Cursive, artist_name: &str, collection: Vec<ArtistData>) 
             break;
         }
     }
+
     select.add_all_str(content.lines());
     let name = String::from(artist_name);
     select.set_on_submit(move |s, m| show_tracks(s, &name, m, &collection));
@@ -142,12 +140,9 @@ fn show_tracks(s: &mut Cursive, artist_name: &str, album_title: &str, collection
     );
 }
 
-async fn get_peer_collection(addr: &str, state: Arc<Mutex<Service>>) -> Vec<ArtistData> {
-    use std::net::SocketAddr;
-
+async fn get_peer_collection(addr: &SocketAddr, state: Arc<Mutex<Service>>) -> Vec<ArtistData> {
     let mut s = state.lock().await;
-    let socket: SocketAddr = addr.parse().unwrap();
-    let collection = s.database.get_collection(&socket);
+    let collection = s.database.get_collection(addr);
     collection.artists
 }
 

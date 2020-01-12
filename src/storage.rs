@@ -52,13 +52,21 @@ impl Db {
         self.world.maintain();
     }
 
+    pub fn insert_address(&mut self, addr: &SocketAddr, peer: Peer) {
+        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(&peer.address).unwrap();
+        self.world.fetch_mut::<WorldState<Peer>>().insert_address(&addr, entity);
+        self.maintain();
+    }
+
     pub fn all_peers(&self) -> Vec<Peer> {
         self.world.read_storage::<Peer>().join().map(|x| x.clone()).collect()
     }
 
     pub fn add_peer(&mut self, p: Peer, c: Collection) {
-        self.world.create_entity().with(p).with(c).build();
-        self.maintain()
+        if None == self.world.fetch::<WorldState<Peer>>().get_entity(&p.address) {
+            self.world.create_entity().with(p).with(c).build();
+            self.maintain();
+        }
     }
 
     pub fn add_peers(&mut self, peers: Vec<Peer>) {
@@ -105,7 +113,9 @@ impl Db {
                     .insert(entity, c)
                     .unwrap();
             }
-            None => panic!("PEER DOESNT EXIST!")
+            None => {
+                panic!("PEER DOESNT EXIST!")
+            }
         };
     }
 

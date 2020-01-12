@@ -9,12 +9,14 @@ use tokio::time;
 use music_snobster::handlers::{process, Service};
 use music_snobster::handlers::scheduler::run_scheduled_tasks;
 use music_snobster::args::get_args;
-use music_snobster::tui::run_tui;
+use music_snobster::ui::tui::run_tui;
+
 
 // TODO: handle requests
 //   - SEND FILE
 //   - REQUEST FILE
 //   - DOWNLOAD FILE
+//   - use name instead of address
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -59,8 +61,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // process incoming requests
-    // add support for outgoing requests also, ie.
-    // let mut stream = TcpStream::connect("127.0.0.1:34254")?;
     loop {
         let (stream, addr) = listener.accept().await?;
         let state = Arc::clone(&state);

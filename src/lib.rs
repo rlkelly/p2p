@@ -11,7 +11,7 @@ pub mod consts;
 pub mod ecs;
 pub mod storage;
 pub mod args;
-pub mod tui;
+pub mod ui;
 
 #[macro_use]
 extern crate shred_derive;
