@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use clap::{App, Arg};
 
 // TODO: pass initial peers list comma separated
@@ -9,7 +10,7 @@ pub struct Config {
     pub peers: String,
     pub music: String,
     pub name: String,
-    pub initial_peer: Option<String>,
+    pub initial_peer: Option<Vec<SocketAddr>>,
     pub tui: bool,
 }
 
@@ -20,7 +21,7 @@ impl Config {
         peers: &str,
         music: &str,
         name: &str,
-        initial_peer: Option<String>,
+        initial_peer: Option<Vec<SocketAddr>>,
         tui: bool,
     ) -> Self {
         Config {
@@ -61,7 +62,7 @@ pub fn get_args() -> Config {
             .value_name("DIRECTORY")
             .help("where your music collection lives")
             .takes_value(true))
-        .arg(Arg::with_name("initial_peer")
+        .arg(Arg::with_name("initial_peers")
             .short("f")
             .long("friends")
             .help("initial peers")
@@ -78,13 +79,21 @@ pub fn get_args() -> Config {
             .takes_value(false))
         .get_matches();
 
+    let initial_peers = matches.value_of("initial_peers");
+    let peers: Option<Vec<SocketAddr>> = if let Some(peers) = initial_peers {
+        let peer_vec: Vec<&str> = peers.split(",").collect();
+        Some(peer_vec.into_iter().map(|x| x.parse().unwrap()).collect::<Vec<SocketAddr>>())
+    } else {
+        None
+    };
+
     Config::new(
         value_t!(matches, "port", u16).unwrap_or(8081u16),
         matches.value_of("config").unwrap_or("/tmp/thing.bin"),
         matches.value_of("peers").unwrap_or("/tmp/peers.bin"),
         matches.value_of("music").unwrap_or("/Users/user2/Documents/music"),
         matches.value_of("name").unwrap_or("UNKNOWN_USER"),
-        matches.value_of("initial_peer").map(String::from),  // Should this be an Option<&str>
+        peers,
         matches.is_present("tui"),
     )
 }

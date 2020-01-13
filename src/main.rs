@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use tokio::sync::Mutex;
@@ -25,17 +24,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut listener = TcpListener::bind(format!("127.0.0.1:{}", config.port)).await?;
 
     // process initial peer(s)
-    if let Some(initial_peer) = config.initial_peer {
-        let addr: SocketAddr = initial_peer.parse().expect("INVALID PEER");
-        let connection = TcpStream::connect(addr).await;
-        let state = Arc::clone(&state);
-
-        if let Ok(stream) = connection {
-            tokio::spawn(async move {
-                if let Err(e) = process(state, stream, addr).await {
-                    println!("an error occured; error = {:?}", e);
-                }
-            });
+    if let Some(initial_peers) = config.initial_peer {
+        for peer in initial_peers {
+            let connection = TcpStream::connect(peer).await;
+            let state = Arc::clone(&state);
+            if let Ok(stream) = connection {
+                tokio::spawn(async move {
+                    if let Err(e) = process(state, stream, peer).await {
+                        println!("an error occured; error = {:?}", e);
+                    }
+                });
+            }
         }
     }
 
