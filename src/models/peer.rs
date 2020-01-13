@@ -45,7 +45,7 @@ impl Peer {
             addr,
             true,
             Some("TEST".into()),
-            None,
+            Some("ABC123".into()),
             Some("ZYX987".into()))
     }
 

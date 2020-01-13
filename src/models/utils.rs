@@ -33,7 +33,7 @@ pub fn bytes_to_ip_addr(src: &mut BytesMut, len: usize) -> SocketAddr {
 
 pub fn get_nstring(src: &mut BytesMut, n: usize) -> Option<String> {
     if n == 0 {
-        return None;
+        return Some(String::new());
     };
     let target = src.split_to(n);
     if target.len() == 0 {

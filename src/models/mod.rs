@@ -1,3 +1,5 @@
+mod chunk;
+mod download_memory;
 mod utils;
 mod data;
 mod service;
@@ -11,6 +13,7 @@ pub use self::data::{
     Collection,
     TrackData,
 };
+pub use chunk::{DownloadChunk, SongData};
 
 pub use self::utils::{
     get_nstring,

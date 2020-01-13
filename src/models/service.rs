@@ -29,7 +29,7 @@ impl Service {
                 format!("127.0.0.1:{}", config.port).parse().unwrap(),
                 true,
                 Some(config.name),
-                None,
+                Some("".into()),
                 Some("ZYX987".into()),
             ),
             database: Db::new_from_file(&config.config),
@@ -49,7 +49,7 @@ impl Service {
 
     pub fn add_peers(&mut self, peers: Vec<Peer>) {
         for peer in peers {
-            if peer == self.my_contact {
+            if self.my_contact == peer {
                 continue;
             }
             self.database.add_peer(peer, Collection::new(vec![]));

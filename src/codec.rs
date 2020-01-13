@@ -6,13 +6,14 @@ use tokio_util::codec::{Decoder, Encoder};
 use crate::models::{
     ArtistData,
     AlbumData,
+    DownloadChunk,
     Peer,
     take_u64,
     get_nstring,
 };
 use crate::consts::*;
 
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MessageEvent {
     Ping(Peer), // add user data
     Pong(Peer), // add user data
@@ -26,6 +27,7 @@ pub enum MessageEvent {
     PeersRequest,
     PeersResponse(Vec<Peer>),
     DownloadRequest(AlbumData),
+    DownloadChunk(DownloadChunk),
     Err(MessageCodecError),
     Ok,
 }
@@ -233,8 +235,34 @@ impl Decoder for MessageCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::TrackData;
+    use crate::models::{ArtistData, AlbumData, TrackData};
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+
+    #[test]
+    fn test_artists_request() {
+        let ad = ArtistData {
+            artist: "my_artist".to_string(),
+            albums: Some(vec![
+                AlbumData::new(
+                    Some("test1".to_string()),
+                    "test1-1".to_string(),
+                    1,
+                    Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
+                ),
+                AlbumData::new(
+                    Some("test4".to_string()),
+                    "test4-4".to_string(),
+                    1,
+                    Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
+                ),
+            ]),
+        };
+        let mut res = BytesMut::new();
+        let ad_vec = vec![ad.clone(), ad.clone()];
+        let artist_request = MessageEvent::ArtistsResponse(ad_vec);
+        MessageCodec{}.encode(artist_request.clone(), &mut res).unwrap();
+        assert_eq!(MessageCodec{}.decode(&mut res).unwrap(), Some(artist_request));
+    }
 
     #[test]
     fn test_serialize_album_request() {

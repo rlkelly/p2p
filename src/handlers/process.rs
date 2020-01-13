@@ -27,11 +27,6 @@ pub async fn process(
         peer.send_message(MessageEvent::Ping(sstate.my_contact.clone())).await.unwrap();
     }
 
-    // // todo: better comparison
-    // if addr.ip().to_string() == "::1" {
-    //     return Ok(());
-    // }
-    //
     while let Some(result) = peer.next().await {
         match result {
             Ok(MessageEvent::Ping(peer_data)) => {
@@ -51,9 +46,10 @@ pub async fn process(
             },
             Ok(MessageEvent::ArtistsRequest) => {
                 let state = state.lock().await;
+                let collection = state.get_collection(true, None, None);
                 peer.send_message(MessageEvent::ArtistsResponse(
-                    state.get_collection(false, None, None))
-                ).await.expect("Artists Response Send Fail");
+                    collection
+                )).await.expect("Artists Response Send Fail");
             },
             Ok(MessageEvent::ArtistsResponse(artist_data)) => {
                 let mut state = state.lock().await;
@@ -67,7 +63,7 @@ pub async fn process(
                             false, album.artist.as_deref(),
                             Some(&album.album_title),
                     ))
-                ).await.expect("Artist Response Send Fail");
+                ).await.expect("Artists Response Send Fail");
             },
             Ok(MessageEvent::AlbumResponse(album_data)) => {
                 let mut state = state.lock().await;
