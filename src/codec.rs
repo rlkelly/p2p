@@ -1,4 +1,5 @@
 use bytes::{BytesMut, BufMut};
+use byteorder::{BigEndian, ReadBytesExt};
 use std::str;
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Decoder, Encoder};
@@ -13,10 +14,19 @@ use crate::models::{
 };
 use crate::consts::*;
 
+// // TODO: I think this will make it clearer who is sending
+// pub struct MessageBody {
+//     message: MessageEvent,
+//     // name: String,
+//     pub_key: String,
+//     signature: String,
+//     outbound: bool,
+// }
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageEvent {
     Ping(Peer), // add user data
-    Pong(Peer), // add user data
+    Pong(Peer),
     Payload(String),
     Broadcast(String),
     RequestFile(ArtistData),
@@ -31,14 +41,6 @@ pub enum MessageEvent {
     Err(MessageCodecError),
     Ok,
 }
-
-// // TODO: I think this will make it clearer who is sending
-// pub struct MessageBody {
-//     message: MessageEvent,
-//     // name: String,
-//     pub_key: String,
-//     signature: String,
-// }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum MessageCodecError {
@@ -147,14 +149,18 @@ impl Decoder for MessageCodec {
 
     fn decode(&mut self, src: &mut BytesMut) ->
         Result<Option<Self::Item>, Self::Error> {
-            let len = src.len();
-            if len == 0 {
+            if src.len() < 8 {
                 return Ok(None);
             }
-            let bytes_len = take_u64(src).expect("invalid message");
-            let data = &mut src.split_to(bytes_len as usize);
+            let mut buf: &[u8] = &src[..8];
+            let message_len = buf.read_u64::<BigEndian>().unwrap() as usize;
 
-            // TODO: validate data length
+            if src.len() < (message_len + 8) {
+                return Ok(None);
+            }
+            let mut buf = src.split_to(message_len + 8);
+            let bytes_len = take_u64(&mut buf).expect("invalid message") as usize;
+            let data = &mut buf.split_to(bytes_len);
             let byte = data.split_to(1)[0];
 
             match byte {
@@ -168,7 +174,7 @@ impl Decoder for MessageCodec {
                 },
                 PAYLOAD => {
                     let data_len = take_u64(data).unwrap() as usize;
-                    let message = get_nstring(data, data_len).unwrap();
+                    let message = get_nstring(data, data_len).expect("payload serialization error");
                     return Ok(Some(MessageEvent::Payload(message)));
                 },
                 REQUEST_FILE => {
@@ -180,7 +186,7 @@ impl Decoder for MessageCodec {
                     return Ok(Some(MessageEvent::ArtistsRequest));
                 },
                 ARTISTS_RESPONSE => {
-                    let mut artist_count = take_u64(data).unwrap() as usize;
+                    let mut artist_count = take_u64(data).expect("artist count error") as usize;
                     let mut artist_vec: Vec<ArtistData> = vec![];
                     while artist_count > 0 {
                         let artist = ArtistData::from_bytes(data);
@@ -204,7 +210,7 @@ impl Decoder for MessageCodec {
                 },
                 PEERS_RESPONSE => {
                     // TODO: parse vector into bytes
-                    let mut peer_count = take_u64(data).unwrap() as usize;
+                    let mut peer_count = take_u64(data).expect("peer response count error") as usize;
                     let mut peer_vec: Vec<Peer> = vec![];
                     while peer_count > 0 {
                         // TODO: take len
@@ -230,7 +236,6 @@ impl Decoder for MessageCodec {
             Ok(None)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

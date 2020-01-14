@@ -50,17 +50,22 @@ impl PeerConnection {
     }
 }
 
+pub enum InboundOutboundMessage {
+    Inbound(MessageEvent),
+    Outbound(MessageEvent),
+}
+
 impl Stream for PeerConnection {
-    type Item = Result<MessageEvent, MessageCodecError>;
+    type Item = Result<InboundOutboundMessage, MessageCodecError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Poll::Ready(Some(v)) = Pin::new(&mut self.rx).poll_next(cx) {
-            return Poll::Ready(Some(Ok(v)));
+            return Poll::Ready(Some(Ok(InboundOutboundMessage::Outbound(v))));
         }
 
         let result: Option<_> = futures::ready!(Pin::new(&mut self.messages).poll_next(cx));
         Poll::Ready(match result {
-            Some(Ok(message)) => Some(Ok(message)),
+            Some(Ok(message)) => Some(Ok(InboundOutboundMessage::Inbound(message))),
             Some(Err(e)) => Some(Err(e)),
             None => None,
         })

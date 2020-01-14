@@ -16,7 +16,6 @@ pub struct Service {
     pub my_contact: Peer,
     pub database: Db,
     pub storage_dir: String,
-    pub counter: u8,
     pub port: u16,
 }
 
@@ -34,7 +33,6 @@ impl Service {
             ),
             database: Db::new_from_file(&config.config),
             storage_dir: config.music,
-            counter: 0,
             port: config.port,
         }
     }
@@ -64,8 +62,14 @@ impl Service {
         self.database.insert_address(&addr, p);
     }
 
-    pub fn incr(&mut self) {
-        self.counter += 1;
+    pub fn update_peer_key(&mut self, new_addr: SocketAddr, old_addr: &SocketAddr) {
+        if new_addr == *old_addr {
+            return;
+        }
+        if let Some(peer) = self.peers.get(old_addr) {
+            self.peers.insert(new_addr, peer.clone());
+            self.peers.remove(&old_addr);
+        }
     }
 }
 

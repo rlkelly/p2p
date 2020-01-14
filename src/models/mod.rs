@@ -21,5 +21,5 @@ pub use self::utils::{
     bytes_to_ip_addr,
 };
 
-pub use self::peer_connection::PeerConnection;
+pub use self::peer_connection::{InboundOutboundMessage, PeerConnection};
 pub use self::peer::Peer;

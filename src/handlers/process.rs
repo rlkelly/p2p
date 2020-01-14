@@ -1,3 +1,5 @@
+use bytes::BytesMut;
+
 use std::sync::Arc;
 use std::error::Error;
 use std::net::SocketAddr;
@@ -8,10 +10,11 @@ use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 
 pub use crate::models::Service;
-use crate::models::{Collection, PeerConnection};
+use crate::models::{Collection, InboundOutboundMessage, Peer, PeerConnection};
 use crate::codec::{
     MessageEvent,
     MessageCodec,
+    MessageCodecError,
 };
 
 pub async fn process(
@@ -19,28 +22,33 @@ pub async fn process(
     stream: TcpStream,
     addr: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
+    // maybe add a HELO?
     let transport = Framed::new(stream, MessageCodec::new());
     let mut peer = PeerConnection::new(state.clone(), transport).await?;
 
-    {
-        let sstate = state.lock().await;
-        peer.send_message(MessageEvent::Ping(sstate.my_contact.clone())).await.unwrap();
-    }
-
-    while let Some(result) = peer.next().await {
+    while let Some(polled) = peer.next().await {
+        let result: Result<MessageEvent, MessageCodecError> = match polled {
+            Ok(InboundOutboundMessage::Inbound(msg)) => {
+                Ok(msg)
+            },
+            Ok(InboundOutboundMessage::Outbound(msg)) => {
+                peer.send_message(msg).await.expect("failed to send outbound message");
+                continue;
+            },
+            _ => Err(MessageCodecError::IO),
+        };
         match result {
             Ok(MessageEvent::Ping(peer_data)) => {
                 let mut state = state.lock().await;
+                state.update_peer_key(peer_data.address, &addr); // they can lie
                 peer.send_message(MessageEvent::Pong(state.my_contact.clone())).await.expect("FAILED PONG");
-                state.add_peer(peer_data.clone(), Collection::new(vec![]), &addr);
+                let exists = state.add_peer(peer_data.clone(), Collection::new(vec![]), &addr);
                 peer.send_message(MessageEvent::ArtistsRequest).await.expect("FAILED ARTIST REQUEST");
             },
             Ok(MessageEvent::Pong(peer_data)) => {
-                // TODO: how to handle connection different from server???
-                //       when a user connects to their initial peer, their ip address
-                //       will be different than their server address
-
                 let mut state = state.lock().await;
+                // TODO: clean this up
+                state.update_peer_key(peer_data.address, &addr); // they can lie
                 state.add_peer(peer_data.clone(), Collection::new(vec![]), &addr);
                 peer.send_message(MessageEvent::ArtistsRequest).await.expect("FAILED ARTIST REQUEST");
             },
