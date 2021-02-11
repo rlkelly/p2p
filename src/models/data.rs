@@ -61,9 +61,9 @@ impl ArtistData {
     }
 
     pub fn from_bytes(buf: &mut BytesMut) -> ArtistData {
-        let artist_name_len = take_u64(buf).unwrap() as usize;
-        let artist = get_nstring(buf, artist_name_len).unwrap();
-        let mut album_count = take_u64(buf).unwrap();
+        let artist_name_len = take_u64(buf).expect("artist data name error") as usize;
+        let artist = get_nstring(buf, artist_name_len).expect("artist name error");
+        let mut album_count = take_u64(buf).expect("album count error");
         let mut album_vec: Vec<AlbumData> = vec![];
 
         let albums = if album_count > 0 {
@@ -130,17 +130,17 @@ impl AlbumData {
     }
 
     pub fn from_bytes(buf: &mut BytesMut) -> AlbumData {
-        let artist_name_len = take_u64(buf).unwrap() as usize;
+        let artist_name_len = take_u64(buf).expect("artist name len error") as usize;
         let artist = get_nstring(buf, artist_name_len);
-        let album_name_len = take_u64(buf).unwrap() as usize;
-        let album = get_nstring(buf, album_name_len).unwrap();
+        let album_name_len = take_u64(buf).expect("album name len error") as usize;
+        let album = get_nstring(buf, album_name_len).expect("album name error");
         let track_count = buf.split_to(1)[0];
         let get_tracks = buf.split_to(1)[0];
 
         let tracks = if get_tracks == 1 {
             let mut tracks = vec![];
 
-            let mut track_count = take_u64(buf).unwrap();
+            let mut track_count = take_u64(buf).expect("track count parse error");
             while track_count > 0 {
                 let track: TrackData = buf.into();
                 tracks.push(track);
@@ -157,12 +157,13 @@ impl AlbumData {
             track_count,
             tracks,
         )
-
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct TrackData {
+    pub artist: Option<String>,
+    pub album: Option<String>,
     pub title: String,
     bitrate: u16,
     length: u8,
@@ -171,6 +172,8 @@ pub struct TrackData {
 impl TrackData {
     pub fn new(title: String, bitrate: u16, length: u8) -> TrackData {
         TrackData {
+            artist: None,
+            album: None,
             title,
             bitrate,
             length,
@@ -189,10 +192,10 @@ impl TrackData {
 
 impl From<&mut BytesMut> for TrackData {
     fn from(buf: &mut BytesMut) -> TrackData {
-        let track_name_len = take_u64(buf).unwrap() as usize;
-        let track = get_nstring(buf, track_name_len).unwrap();
-        let bitrate: u16 = take_u16(buf).unwrap();
-        let length: u8 = buf.split_to(1)[0].try_into().unwrap();
+        let track_name_len = take_u64(buf).expect("track name len error") as usize;
+        let track = get_nstring(buf, track_name_len).expect("track name error");
+        let bitrate: u16 = take_u16(buf).expect("bitrate error");
+        let length: u8 = buf.split_to(1)[0].try_into().expect("track length error");
         TrackData::new(
             track,
             bitrate,

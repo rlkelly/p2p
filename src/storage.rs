@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use crate::models::{AlbumData, ArtistData, Collection, Peer};
 use crate::ecs::{
     Node,
+    // NodeEvent,
     NodeSystem,
     WorldState,
 };
@@ -23,15 +24,15 @@ impl Component for Peer {
     type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
 }
 
-impl Node for Peer {
-    fn addr(&self) -> SocketAddr {
+impl Node<SocketAddr> for Peer {
+    fn index(&self) -> SocketAddr {
         self.address
     }
 }
 
 pub struct Db {
     world: World,
-    system: NodeSystem<Peer>,
+    system: NodeSystem<Peer, SocketAddr>,
 }
 
 impl Db {
@@ -39,8 +40,8 @@ impl Db {
         let mut world = World::new();
         world.register::<Peer>();
         world.register::<Collection>();
-        let system = NodeSystem::<Peer>::new(&mut world);
-        let _reader_id = world.write_resource::<WorldState<Peer>>().track();
+        let system = NodeSystem::<Peer, SocketAddr>::new(&mut world);
+        let _reader_id = world.write_resource::<WorldState<Peer, SocketAddr>>().track();
         Db {
             world,
             system,
@@ -52,19 +53,28 @@ impl Db {
         self.world.maintain();
     }
 
+    pub fn insert_address(&mut self, addr: &SocketAddr, peer: Peer) {
+        let entity = self.world.fetch::<WorldState<Peer, SocketAddr>>().get_entity(&peer.address).expect("FAILED GET ENTITY");
+        self.world.fetch_mut::<WorldState<Peer, SocketAddr>>().insert_address(&addr, entity);
+        self.maintain();
+    }
+
     pub fn all_peers(&self) -> Vec<Peer> {
         self.world.read_storage::<Peer>().join().map(|x| x.clone()).collect()
     }
 
     pub fn add_peer(&mut self, p: Peer, c: Collection) {
-        self.world.create_entity().with(p).with(c).build();
-        self.maintain()
+        // // todo: better comparison
+        if None == self.world.fetch::<WorldState<Peer, SocketAddr>>().get_entity(&p.address) {
+            self.world.create_entity().with(p).with(c).build();
+            self.maintain();
+        }
     }
 
     pub fn add_peers(&mut self, peers: Vec<Peer>) {
         for peer in peers {
-            let collection = self.get_collection(&peer.addr());
-            self.world.create_entity().with(peer).with(collection).build();
+            let collection = self.get_collection(&peer.index());
+            self.add_peer(peer, collection);
         }
         self.maintain()
     }
@@ -99,14 +109,29 @@ impl Db {
     }
 
     pub fn update_collection(&mut self, addr: &SocketAddr, c: Collection) {
-        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(addr).unwrap();
-        self.world.write_storage::<Collection>()
-            .insert(entity, c)
-            .unwrap();
+        match self.world.fetch::<WorldState<Peer, SocketAddr>>().get_entity(addr) {
+            Some(entity) => {
+                self.world.write_storage::<Collection>()
+                    .insert(entity, c)
+                    .unwrap();
+            }
+            None => {
+                panic!("PEER DOESNT EXIST!")
+            }
+        };
+    }
+
+    pub fn delete_entity(&mut self, addr: &SocketAddr) {
+        let entity_result = self.world.fetch::<WorldState<Peer, SocketAddr>>().get_entity(addr);
+        if let Some(entity) = entity_result {
+            self.world.delete_entity(entity).expect("entity deletion failed");
+        }
+        self.world.fetch_mut::<WorldState<Peer, SocketAddr>>().remove_address(&addr);
+        self.maintain();
     }
 
     pub fn get_collection(&mut self, addr: &SocketAddr) -> Collection {
-        let entity = self.world.fetch::<WorldState<Peer>>().get_entity(addr);
+        let entity = self.world.fetch::<WorldState<Peer, SocketAddr>>().get_entity(addr);
         if entity == None {
             return Collection::new(vec![]);
         }

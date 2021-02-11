@@ -6,7 +6,6 @@ use std::str;
 use std::net::{
     SocketAddr,
     IpAddr,
-    Ipv6Addr,
 };
 use serde::{Deserialize, Serialize};
 use super::{
@@ -35,14 +34,18 @@ impl Peer {
         }
     }
 
-    pub fn get_self() -> Self {
+    pub fn update_addr(&mut self, addr: SocketAddr) -> Self {
+        self.address = addr;
+        self.clone()
+    }
+
+    pub fn get_self(addr: SocketAddr) -> Self {
         // TODO: get ip address and port on init
-        let ip = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2)), 8000);
         Peer::new(
-            ip,
-            false,
+            addr,
+            true,
             Some("TEST".into()),
-            None,
+            Some("ABC123".into()),
             Some("ZYX987".into()))
     }
 
@@ -89,8 +92,8 @@ impl Peer {
     }
 
     pub fn from_bytes(buf: &mut BytesMut) -> Self {
-        let _ip_len = take_u64(buf).unwrap();
-        let address = bytes_to_ip_addr(buf);
+        let ip_len = take_u64(buf).unwrap();
+        let address = bytes_to_ip_addr(buf, ip_len as usize);
         let accept_incoming_byte = buf.split_to(1)[0] as u8;
         let accept_incoming = accept_incoming_byte == 1u8;
         let name_key = buf.split_to(1)[0] as usize;

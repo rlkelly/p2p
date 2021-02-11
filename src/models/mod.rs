@@ -1,3 +1,5 @@
+mod chunk;
+mod download_memory;
 mod utils;
 mod data;
 mod service;
@@ -11,6 +13,7 @@ pub use self::data::{
     Collection,
     TrackData,
 };
+pub use chunk::{DownloadChunk, SongData};
 
 pub use self::utils::{
     get_nstring,
@@ -18,5 +21,5 @@ pub use self::utils::{
     bytes_to_ip_addr,
 };
 
-pub use self::peer_connection::PeerConnection;
+pub use self::peer_connection::{InboundOutboundMessage, PeerConnection};
 pub use self::peer::Peer;

@@ -2,18 +2,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::Mutex;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::time;
 
 use music_snobster::handlers::{process, Service};
-use music_snobster::handlers::scheduler::ping_all_peers;
+use music_snobster::handlers::scheduler::run_scheduled_tasks;
 use music_snobster::args::get_args;
-use music_snobster::tui::run_tui;
+use music_snobster::ui::tui::run_tui;
 
 // TODO: handle requests
 //   - SEND FILE
 //   - REQUEST FILE
 //   - DOWNLOAD FILE
+//   - use name instead of address
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,6 +22,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:?}", config);
     let state = Arc::new(Mutex::new(Service::new(config.clone())));
     let mut listener = TcpListener::bind(format!("127.0.0.1:{}", config.port)).await?;
+
+    // process initial peer(s)
+    if let Some(initial_peers) = config.initial_peer {
+        for peer in initial_peers {
+            let connection = TcpStream::connect(peer).await;
+            let state = Arc::clone(&state);
+            if let Ok(stream) = connection {
+                tokio::spawn(async move {
+                    if let Err(e) = process(state, stream, peer).await {
+                        println!("an error occured; error = {:?}", e);
+                    }
+                });
+            }
+        }
+    }
 
     // text interface
     if config.tui {
@@ -34,17 +50,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // regularly scheduled background tasks
     let scheduler_state = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(10_000));
+        let mut interval = time::interval(Duration::from_millis(3_000));
         loop {
             let ss = Arc::clone(&scheduler_state);
             interval.tick().await;
-            ping_all_peers(ss).await;
+            run_scheduled_tasks(ss).await;
         }
     });
 
     // process incoming requests
-    // add support for outgoing requests also, ie.
-    // let mut stream = TcpStream::connect("127.0.0.1:34254")?;
     loop {
         let (stream, addr) = listener.accept().await?;
         let state = Arc::clone(&state);

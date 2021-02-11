@@ -6,13 +6,26 @@ use std::net::{
     IpAddr,
 };
 
-pub fn bytes_to_ip_addr(src: &mut BytesMut) -> SocketAddr {
-    let addr_slice = src.split_to(16);
-    let mut addr = [0u8; 16];
-    for (x, y) in addr_slice.iter().zip(addr.iter_mut()) {
-        *y = *x;
-    }
-    let ip_addr: IpAddr = addr.into();
+pub fn bytes_to_ip_addr(src: &mut BytesMut, len: usize) -> SocketAddr {
+    let addr_slice = src.split_to(len);
+    let ip_addr: IpAddr = match len {
+        4 => {
+            let mut addr = [0u8; 4];
+            for (x, y) in addr_slice.iter().zip(addr.iter_mut()) {
+                *y = *x;
+            }
+            addr.into()
+        },
+        16 => {
+            let mut addr = [0u8; 16];
+            for (x, y) in addr_slice.iter().zip(addr.iter_mut()) {
+                *y = *x;
+            }
+            addr.into()
+        },
+        _ => panic!("invalid ip size"),
+    };
+    // let mut addr = [0u8; 8];
     let mut port_slice: &[u8] = &src.split_to(2)[..];
     let port = port_slice.read_u16::<BigEndian>().unwrap() as u16;
     SocketAddr::new(ip_addr, port)
@@ -20,7 +33,7 @@ pub fn bytes_to_ip_addr(src: &mut BytesMut) -> SocketAddr {
 
 pub fn get_nstring(src: &mut BytesMut, n: usize) -> Option<String> {
     if n == 0 {
-        return None;
+        return Some(String::new());
     };
     let target = src.split_to(n);
     if target.len() == 0 {

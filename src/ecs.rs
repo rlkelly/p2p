@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::marker::PhantomData;
-use std::net::SocketAddr;
 
 use hibitset::BitSetLike;
 use shrev::EventChannel;
@@ -17,9 +17,9 @@ pub enum NodeEvent {
     Removed(Entity),
 }
 
-pub struct WorldState<P> {
+pub struct WorldState<P, T> {
     sorted: Vec<Entity>,
-    addresses: HashMap<SocketAddr, usize>,
+    indexes: HashMap<T, usize>,
     entities: HashMap<Index, usize>,
 
     changed: EventChannel<NodeEvent>,
@@ -33,15 +33,16 @@ pub struct WorldState<P> {
     _phantom: PhantomData<P>,
 }
 
-impl<P> WorldState<P> {
+impl<P, T> WorldState<P, T> where T: Eq + Hash + Send {
     pub fn new(reader_id: ReaderId<ComponentEvent>) -> Self
     where
         P: Component,
         P::Storage: Tracked,
+        T: Hash + Eq + Clone
     {
         WorldState {
             sorted: Vec::new(),
-            addresses: HashMap::new(),
+            indexes: HashMap::new(),
             entities: HashMap::new(),
             changed: EventChannel::new(),
 
@@ -56,8 +57,25 @@ impl<P> WorldState<P> {
         }
     }
 
-    pub fn get_entity(&self, addr: &SocketAddr) -> Option<Entity> {
-        if let Some(ix) = self.addresses.get(addr) {
+    pub fn all_indexes(&self) -> HashMap<T, usize>
+    where T: Clone {
+        self.indexes.clone()
+    }
+
+    pub fn insert_address(&mut self, addr: &T, entity: Entity)
+    where T: Copy {
+        let ix = self.entities[&entity.id()];
+        self.indexes.insert(*addr, ix);
+    }
+
+    pub fn remove_address(&mut self, addr: &T)
+    where T: Clone {
+        self.indexes.remove(addr);
+    }
+
+    pub fn get_entity(&self, addr: &T) -> Option<Entity>
+    where T: Clone {
+        if let Some(ix) = self.indexes.get(addr) {
             Some(self.sorted[*ix])
         } else {
             None
@@ -79,10 +97,11 @@ impl<P> WorldState<P> {
     }
 
     /// Maintain the WorldState, usually only called by `NodeSystem`.
-    pub fn maintain(&mut self, data: EntityData<P>)
+    pub fn maintain(&mut self, data: EntityData<P, T>)
     where
-        P: Component + Node,
+        P: Component + Node<T>,
         P::Storage: Tracked,
+        T: Eq
     {
         let EntityData {
             entities, nodes, ..
@@ -110,7 +129,7 @@ impl<P> WorldState<P> {
 
         // bump duplicates
         for (_entity, _, node) in (&*entities, &self.inserted, &nodes).join() {
-            if let Some(ix) = self.addresses.get(&node.addr()) {
+            if let Some(ix) = self.indexes.get(&node.index()) {
                 let other_entity = self.sorted[ix.clone()];
                 self.removed.add(other_entity.id());
             }
@@ -150,7 +169,7 @@ impl<P> WorldState<P> {
             }
         }
         for (_, _, node) in (&*entities, &self.removed, &nodes).join() {
-            self.addresses.remove(&node.addr());
+            self.indexes.remove(&node.index());
         }
         self.scratch_set.clear();
 
@@ -160,13 +179,13 @@ impl<P> WorldState<P> {
             self.sorted.push(entity);
             self.scratch_set.insert(entity);
 
-            if let Some(ix) = self.addresses.get(&node.addr()) {
+            if let Some(ix) = self.indexes.get(&node.index()) {
                 let other_entity = self.sorted[ix.clone()];
                 if !self.removed.contains(other_entity.id()) {
                     self.changed.single_write(NodeEvent::Removed(other_entity));
                 }
             }
-            self.addresses.insert(node.addr(), insert_index);
+            self.indexes.insert(node.index(), insert_index);
         }
 
         if !self.scratch_set.is_empty() {
@@ -183,48 +202,53 @@ impl<P> WorldState<P> {
     }
 }
 
-pub trait Node {
-    fn addr(&self) -> SocketAddr;
+pub trait Node<T> {
+    fn index(&self) -> T;
 }
 
 #[derive(SystemData)]
-pub struct EntityData<'a, P>
+pub struct EntityData<'a, P, T>
 where
-    P: Component + Node,
+    P: Component + Node<T>,
     P::Storage: Tracked,
+    T: Hash + Send + Eq
 {
     entities: Entities<'a>,
     nodes: ReadStorage<'a, P>,
+    _index: PhantomData<T>,
 }
 
-pub struct NodeSystem<P> {
+pub struct NodeSystem<P, T> {
     m: PhantomData<P>,
+    n: PhantomData<T>,
 }
 
-impl<P> NodeSystem<P>
+impl<P, T> NodeSystem<P, T>
 where
-    P: Component + Node + Send + Sync + 'static,
+    P: Component + Node<T> + Send + Sync + 'static,
     P::Storage: Tracked,
+    T: Hash + Clone + Eq + Send + Sync + 'static
 {
     pub fn new(mut world: &mut World) -> Self {
         <Self as System<'_>>::SystemData::setup(&mut world);
-        if !world.has_value::<WorldState<P>>() {
+        if !world.has_value::<WorldState<P, T>>() {
             let world_state = {
                 let mut storage: WriteStorage<P> = SystemData::fetch(&world);
-                WorldState::<P>::new(storage.register_reader())
+                WorldState::<P, T>::new(storage.register_reader())
             };
             world.insert(world_state);
         }
-        NodeSystem { m: PhantomData }
+        NodeSystem { m: PhantomData, n: PhantomData }
     }
 }
 
-impl<'a, P> System<'a> for NodeSystem<P>
+impl<'a, P, T> System<'a> for NodeSystem<P, T>
 where
-    P: Component + Node + Send + Sync + 'static,
+    P: Component + Node<T> + Send + Sync + 'static,
     P::Storage: Tracked,
+    T: Hash + Eq + Send + Sync + 'static
 {
-    type SystemData = (EntityData<'a, P>, WriteExpect<'a, WorldState<P>>);
+    type SystemData = (EntityData<'a, P, T>, WriteExpect<'a, WorldState<P, T>>);
 
     fn run(&mut self, (data, mut world_state): Self::SystemData) {
         world_state.maintain(data);
@@ -235,14 +259,14 @@ where
 mod tests {
 
     use super::*;
-    use std::net::{IpAddr, Ipv6Addr};
     use super::Node as NNode;
+    use std::net::{SocketAddr, IpAddr, Ipv6Addr};
     use specs::prelude::{DenseVecStorage, FlaggedStorage};
     use specs::world::Builder;
     use specs::{WorldExt, RunNow};
 
     struct Node {
-        addr: SocketAddr,
+        index: SocketAddr,
         name: String,
     }
 
@@ -256,16 +280,16 @@ mod tests {
         }
     }
 
-    impl NNode for Node {
-        fn addr(&self) -> SocketAddr {
-            self.addr
+    impl NNode<SocketAddr> for Node {
+        fn index(&self) -> SocketAddr {
+            self.index
         }
     }
 
     fn delete_removals(world: &mut World, reader_id: &mut ReaderId<NodeEvent>) {
         // TODO: this is a kludge
         let mut remove = vec![];
-        for event in world.fetch::<WorldState<Node>>().changed().read(reader_id) {
+        for event in world.fetch::<WorldState<Node, SocketAddr>>().changed().read(reader_id) {
             if let NodeEvent::Removed(entity) = *event {
                 remove.push(entity);
             }
@@ -281,17 +305,17 @@ mod tests {
     fn test_make_world() {
         let mut world = World::new();
         world.register::<Node>();
-        let mut system = NodeSystem::<Node>::new(&mut world);
-        let _reader_id = world.write_resource::<WorldState<Node>>().track();
+        let mut system = NodeSystem::<Node, SocketAddr>::new(&mut world);
+        let _reader_id = world.write_resource::<WorldState<Node, SocketAddr>>().track();
         let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 80);
         let ip2 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 2)), 80);
         let ip3 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 3)), 80);
         let ip4 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 4)), 80);
 
-        let e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
-        let e2 = world.create_entity().with(Node { addr: ip2, name: "second".to_string() }).build();
-        let e3 = world.create_entity().with(Node { addr: ip3, name: "third".to_string() }).build();
-        let e4 = world.create_entity().with(Node { addr: ip4, name: "fourth".to_string() }).build();
+        let e1 = world.create_entity().with(Node { index: ip1, name: "first".to_string() }).build();
+        let e2 = world.create_entity().with(Node { index: ip2, name: "second".to_string() }).build();
+        let e3 = world.create_entity().with(Node { index: ip3, name: "third".to_string() }).build();
+        let e4 = world.create_entity().with(Node { index: ip4, name: "fourth".to_string() }).build();
 
         system.run_now(&mut world);
         world.maintain();
@@ -312,16 +336,16 @@ mod tests {
         assert_eq!(world.is_alive(e4), true);
 
         let ip5 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 5)), 80);
-        let e5 = world.create_entity().with(Node { addr: ip5, name: "fifth".to_string() }).build();
+        let e5 = world.create_entity().with(Node { index: ip5, name: "fifth".to_string() }).build();
         system.run_now(&mut world);
         world.maintain();
 
-        assert_eq!(3, world.read_resource::<WorldState<Node>>().all().len());
+        assert_eq!(3, world.read_resource::<WorldState<Node, SocketAddr>>().all().len());
         {
             let nodes = world.read_storage::<Node>();
             let node = nodes
                 .get(e5)
-                .map(|node| node.addr())
+                .map(|node| node.index())
                 .unwrap();
             assert_eq!(node, ip5);
         }
@@ -331,20 +355,20 @@ mod tests {
     fn test_duplicate_insert() {
         let mut world = World::new();
         world.register::<Node>();
-        let mut system = NodeSystem::<Node>::new(&mut world);
-        let mut reader_id = world.write_resource::<WorldState<Node>>().track();
+        let mut system = NodeSystem::<Node, SocketAddr>::new(&mut world);
+        let mut reader_id = world.write_resource::<WorldState<Node, SocketAddr>>().track();
         let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 80);
-        let _e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
-        let _e2 = world.create_entity().with(Node { addr: ip1, name: "second".to_string() }).build();
+        let _e1 = world.create_entity().with(Node { index: ip1, name: "first".to_string() }).build();
+        let _e2 = world.create_entity().with(Node { index: ip1, name: "second".to_string() }).build();
         system.run_now(&mut world);
         delete_removals(&mut world, &mut reader_id);
         world.maintain();
-        assert_eq!(2, world.read_resource::<WorldState<Node>>().all().len());
+        assert_eq!(2, world.read_resource::<WorldState<Node, SocketAddr>>().all().len());
 
         system.run_now(&mut world);
         world.maintain();
-        assert_eq!(1, world.read_resource::<WorldState<Node>>().all().len());
-        let entity = world.read_resource::<WorldState<Node>>().all()[0];
+        assert_eq!(1, world.read_resource::<WorldState<Node, SocketAddr>>().all().len());
+        let entity = world.read_resource::<WorldState<Node, SocketAddr>>().all()[0];
 
         let node_name = world.read_storage::<Node>()
             .get(entity)
@@ -357,21 +381,21 @@ mod tests {
     fn test_replacement() {
         let mut world = World::new();
         world.register::<Node>();
-        let mut system = NodeSystem::<Node>::new(&mut world);
-        let mut reader_id = world.write_resource::<WorldState<Node>>().track();
+        let mut system = NodeSystem::<Node, SocketAddr>::new(&mut world);
+        let mut reader_id = world.write_resource::<WorldState<Node, SocketAddr>>().track();
 
         let ip1 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 80);
-        let _e1 = world.create_entity().with(Node { addr: ip1, name: "first".to_string() }).build();
+        let _e1 = world.create_entity().with(Node { index: ip1, name: "first".to_string() }).build();
         system.run_now(&mut world);
         world.maintain();
 
-        let e2 = world.create_entity().with(Node { addr: ip1, name: "second".to_string() }).build();
+        let e2 = world.create_entity().with(Node { index: ip1, name: "second".to_string() }).build();
         system.run_now(&mut world);
         delete_removals(&mut world, &mut reader_id);
         world.maintain();
-        assert_eq!(1, world.read_resource::<WorldState<Node>>().all().len());
+        assert_eq!(1, world.read_resource::<WorldState<Node, SocketAddr>>().all().len());
 
-        let entity = world.fetch::<WorldState<Node>>().get_entity(&ip1).unwrap();
+        let entity = world.fetch::<WorldState<Node, SocketAddr>>().get_entity(&ip1).unwrap();
         assert_eq!(entity, e2);
     }
 }

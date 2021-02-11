@@ -1,4 +1,5 @@
 use bytes::{BytesMut, BufMut};
+use byteorder::{BigEndian, ReadBytesExt};
 use std::str;
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Decoder, Encoder};
@@ -6,16 +7,26 @@ use tokio_util::codec::{Decoder, Encoder};
 use crate::models::{
     ArtistData,
     AlbumData,
+    DownloadChunk,
     Peer,
     take_u64,
     get_nstring,
 };
 use crate::consts::*;
 
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+// // TODO: I think this will make it clearer who is sending
+// pub struct MessageBody {
+//     message: MessageEvent,
+//     // name: String,
+//     pub_key: String,
+//     signature: String,
+//     outbound: bool,
+// }
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum MessageEvent {
     Ping(Peer), // add user data
-    Pong(Peer), // add user data
+    Pong(Peer),
     Payload(String),
     Broadcast(String),
     RequestFile(ArtistData),
@@ -25,6 +36,8 @@ pub enum MessageEvent {
     AlbumResponse(AlbumData),
     PeersRequest,
     PeersResponse(Vec<Peer>),
+    DownloadRequest(AlbumData),
+    DownloadChunk(DownloadChunk),
     Err(MessageCodecError),
     Ok,
 }
@@ -63,16 +76,17 @@ impl Encoder for MessageCodec {
   type Item = MessageEvent;
   type Error = MessageCodecError;
 
-  fn encode(&mut self, event: Self::Item, buf: &mut BytesMut) ->
+  fn encode(&mut self, event: Self::Item, src: &mut BytesMut) ->
     Result<(), Self::Error> {
+        let mut buf = BytesMut::new();
         match event {
             MessageEvent::Ping(peer) => {
                 buf.put_u8(PING);
-                buf.extend_from_slice(&peer.to_bytes()[..])
+                buf.extend_from_slice(&peer.to_bytes()[..]);
             },
             MessageEvent::Pong(peer) => {
                 buf.put_u8(PONG);
-                buf.extend_from_slice(&peer.to_bytes()[..])
+                buf.extend_from_slice(&peer.to_bytes()[..]);
             },
             MessageEvent::Payload(message) => {
                 buf.put_u8(PAYLOAD);
@@ -114,12 +128,20 @@ impl Encoder for MessageCodec {
                     buf.extend_from_slice(&bytes[..]);
                 };
             },
+            MessageEvent::DownloadRequest(album) => {
+                buf.put_u8(DOWNLOAD_REQUEST);
+                buf.extend_from_slice(&mut album.to_bytes()[..]);
+            },
+            MessageEvent::Ok => {
+                buf.put_u8(OK);
+            },
             _ => println!("UNKNOWN!!!"),
         }
+        src.put_u64(buf.len() as u64);
+        src.extend_from_slice(&buf[..]);
         Ok(())
     }
 }
-
 
 impl Decoder for MessageCodec {
     type Item = MessageEvent;
@@ -127,41 +149,47 @@ impl Decoder for MessageCodec {
 
     fn decode(&mut self, src: &mut BytesMut) ->
         Result<Option<Self::Item>, Self::Error> {
-            let len = src.len();
-            if len == 0 {
+            if src.len() < 8 {
                 return Ok(None);
             }
+            let mut buf: &[u8] = &src[..8];
+            let message_len = buf.read_u64::<BigEndian>().unwrap() as usize;
 
-            // TODO: validate data length
-            let byte = src.split_to(1)[0];
+            if src.len() < (message_len + 8) {
+                return Ok(None);
+            }
+            let mut buf = src.split_to(message_len + 8);
+            let bytes_len = take_u64(&mut buf).expect("invalid message") as usize;
+            let data = &mut buf.split_to(bytes_len);
+            let byte = data.split_to(1)[0];
 
             match byte {
                 PING => {
-                    let peer = Peer::from_bytes(src);
+                    let peer = Peer::from_bytes(data);
                     return Ok(Some(MessageEvent::Ping(peer)));
                 },
                 PONG => {
-                    let peer = Peer::from_bytes(src);
+                    let peer = Peer::from_bytes(data);
                     return Ok(Some(MessageEvent::Pong(peer)));
                 },
                 PAYLOAD => {
-                    let data_len = take_u64(src).unwrap() as usize;
-                    let message = get_nstring(src, data_len).unwrap();
+                    let data_len = take_u64(data).unwrap() as usize;
+                    let message = get_nstring(data, data_len).expect("payload serialization error");
                     return Ok(Some(MessageEvent::Payload(message)));
                 },
                 REQUEST_FILE => {
                     return Ok(Some(MessageEvent::RequestFile(
-                        ArtistData::from_bytes(src)
+                        ArtistData::from_bytes(data)
                     )));
                 },
                 ARTISTS_REQUEST => {
                     return Ok(Some(MessageEvent::ArtistsRequest));
                 },
                 ARTISTS_RESPONSE => {
-                    let mut artist_count = take_u64(src).unwrap() as usize;
+                    let mut artist_count = take_u64(data).expect("artist count error") as usize;
                     let mut artist_vec: Vec<ArtistData> = vec![];
                     while artist_count > 0 {
-                        let artist = ArtistData::from_bytes(src);
+                        let artist = ArtistData::from_bytes(data);
                         artist_vec.push(artist);
                         artist_count -= 1;
                     }
@@ -169,12 +197,12 @@ impl Decoder for MessageCodec {
                 },
                 ALBUM_REQUEST => {
                     return Ok(Some(MessageEvent::AlbumRequest(
-                        AlbumData::from_bytes(src)
+                        AlbumData::from_bytes(data)
                     )));
                 },
                 ALBUM_RESPONSE => {
                     return Ok(Some(MessageEvent::AlbumRequest(
-                        AlbumData::from_bytes(src)
+                        AlbumData::from_bytes(data)
                     )));
                 },
                 PEERS_REQUEST => {
@@ -182,17 +210,25 @@ impl Decoder for MessageCodec {
                 },
                 PEERS_RESPONSE => {
                     // TODO: parse vector into bytes
-                    let mut peer_count = take_u64(src).unwrap() as usize;
+                    let mut peer_count = take_u64(data).expect("peer response count error") as usize;
                     let mut peer_vec: Vec<Peer> = vec![];
                     while peer_count > 0 {
-                        let peer: Peer = Peer::from_bytes(src);
+                        // TODO: take len
+                        let _len = take_u64(data);
+                        let peer: Peer = Peer::from_bytes(data);
                         peer_vec.push(peer);
                         peer_count -= 1;
                     }
 
                     return Ok(Some(MessageEvent::PeersResponse(peer_vec)));
                 },
+                DOWNLOAD_REQUEST => {
+                    return Ok(Some(MessageEvent::DownloadRequest(
+                        AlbumData::from_bytes(data)
+                    )));
+                },
                 OK => {
+                    println!("OK!");
                     return Ok(Some(MessageEvent::Ok))
                 },
                 _ => {}
@@ -201,12 +237,37 @@ impl Decoder for MessageCodec {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::TrackData;
+    use crate::models::{ArtistData, AlbumData, TrackData};
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+
+    #[test]
+    fn test_artists_request() {
+        let ad = ArtistData {
+            artist: "my_artist".to_string(),
+            albums: Some(vec![
+                AlbumData::new(
+                    Some("test1".to_string()),
+                    "test1-1".to_string(),
+                    1,
+                    Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
+                ),
+                AlbumData::new(
+                    Some("test4".to_string()),
+                    "test4-4".to_string(),
+                    1,
+                    Some(vec![TrackData::new("test".to_string(), 12_000, 250)]),
+                ),
+            ]),
+        };
+        let mut res = BytesMut::new();
+        let ad_vec = vec![ad.clone(), ad.clone()];
+        let artist_request = MessageEvent::ArtistsResponse(ad_vec);
+        MessageCodec{}.encode(artist_request.clone(), &mut res).unwrap();
+        assert_eq!(MessageCodec{}.decode(&mut res).unwrap(), Some(artist_request));
+    }
 
     #[test]
     fn test_serialize_album_request() {
@@ -238,8 +299,9 @@ mod tests {
     fn test_encode_ping() {
         let localhost_v6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
         let mut b = BytesMut::new();
+        b.put_u64(31);
         b.put_u8(PING);
-        b.put_u64(18);
+        b.put_u64(16);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
         b.put_u8(0);
@@ -253,8 +315,9 @@ mod tests {
     fn test_encode_pong() {
         let localhost_v6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)), 8000);
         let mut b = BytesMut::new();
+        b.put_u64(31);
         b.put_u8(PONG);
-        b.put_u64(18);
+        b.put_u64(16);
         b.put_slice(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         b.put_u16(8000);
         b.put_u8(0);
@@ -267,6 +330,7 @@ mod tests {
     #[test]
     fn test_encode_payload() {
         let mut b = BytesMut::new();
+        b.put_u64(21);
         b.put_u8(PAYLOAD);
         b.put_u64(12);
         b.put(&b"hello world\0"[..]);
@@ -276,6 +340,7 @@ mod tests {
         MessageCodec{}.encode(MessageEvent::Payload(String::from("hello world\0")), &mut res).unwrap();
 
         let mut b = BytesMut::new();
+        b.put_u64(21);
         b.put_u8(PAYLOAD);
         b.put_u64(12);
         b.put(&b"hello world\0"[..]);

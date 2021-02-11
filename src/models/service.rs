@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
 use crate::storage::Db;
-use crate::models::{ArtistData, Peer};
+use crate::models::{ArtistData, Collection, Peer};
 use crate::codec::MessageEvent;
 use crate::organizer::get_collection;
 use crate::args::Config;
@@ -16,7 +16,6 @@ pub struct Service {
     pub my_contact: Peer,
     pub database: Db,
     pub storage_dir: String,
-    pub counter: u8,
     pub port: u16,
 }
 
@@ -25,10 +24,15 @@ impl Service {
         // TODO: handle file errors
         Service {
             peers: HashMap::new(),
-            my_contact: Peer::get_self(),
+            my_contact: Peer::new(
+                format!("127.0.0.1:{}", config.port).parse().unwrap(),
+                true,
+                Some(config.name),
+                Some("".into()),
+                Some("ZYX987".into()),
+            ),
             database: Db::new_from_file(&config.config),
             storage_dir: config.music,
-            counter: 0,
             port: config.port,
         }
     }
@@ -41,8 +45,31 @@ impl Service {
         self.database.all_peers()
     }
 
-    pub fn incr(&mut self) {
-        self.counter += 1;
+    pub fn add_peers(&mut self, peers: Vec<Peer>) {
+        for peer in peers {
+            if self.my_contact == peer {
+                continue;
+            }
+            self.database.add_peer(peer, Collection::new(vec![]));
+        }
+    }
+
+    pub fn add_peer(&mut self, p: Peer, c: Collection, addr: &SocketAddr) {
+        if addr == &self.my_contact.address || p == self.my_contact {
+            return;
+        }
+        self.database.add_peer(p.clone(), c);
+        self.database.insert_address(&addr, p);
+    }
+
+    pub fn update_peer_key(&mut self, new_addr: SocketAddr, old_addr: &SocketAddr) {
+        if new_addr == *old_addr {
+            return;
+        }
+        if let Some(peer) = self.peers.get(old_addr) {
+            self.peers.insert(new_addr, peer.clone());
+            self.peers.remove(&old_addr);
+        }
     }
 }
 

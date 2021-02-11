@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use cursive::Cursive;
@@ -38,22 +39,23 @@ fn select_submenu(s: &mut Cursive, m: &str, state: Arc<Mutex<Service>>) {
         let collection = futures::executor::block_on(get_collection(state));
         show_collection(s, collection);
     } else {
-        let peers = futures::executor::block_on(get_peers(state));
-        show_peers(s, peers);
+        let peers = futures::executor::block_on(get_peers(Arc::clone(&state)));
+        show_peers(s, peers, Arc::clone(&state));
     }
 }
 
-fn show_peers(s: &mut Cursive, peers: Vec<Peer>) {
-    let mut select = SelectView::new()
+fn show_peers(s: &mut Cursive, peers: Vec<Peer>, state: Arc<Mutex<Service>>) {
+    let mut select = SelectView::<Peer>::new()
         .h_align(HAlign::Center)
         .autojump();
-    let mut content = String::new();
-    for peer in &peers {
-        content.push_str(peer.name.as_ref().unwrap_or(&"unk".to_string()));
-        content.push_str("\n");
+    for peer in peers {
+        select.add_item(&peer.address.to_string(), peer);
     }
-    select.add_all_str(content.lines());
-    // select.set_on_submit(move |s, m| show_albums(s, m, collection.clone()));
+    // TODO: get collection for peer
+    select.set_on_submit(move |s, peer| {
+        let collection = futures::executor::block_on(get_peer_collection(&peer.address, Arc::clone(&state)));
+        show_collection(s, collection);
+    });
     s.add_layer(
         Dialog::around(select.scrollable().fixed_size((20, 10)))
             .title("Peers")
@@ -95,6 +97,7 @@ fn show_albums(s: &mut Cursive, artist_name: &str, collection: Vec<ArtistData>) 
             break;
         }
     }
+
     select.add_all_str(content.lines());
     let name = String::from(artist_name);
     select.set_on_submit(move |s, m| show_tracks(s, &name, m, &collection));
@@ -135,6 +138,12 @@ fn show_tracks(s: &mut Cursive, artist_name: &str, album_title: &str, collection
             .title(album_title)
             .button("Back", |s| {s.pop_layer();}),
     );
+}
+
+async fn get_peer_collection(addr: &SocketAddr, state: Arc<Mutex<Service>>) -> Vec<ArtistData> {
+    let mut s = state.lock().await;
+    let collection = s.database.get_collection(addr);
+    collection.artists
 }
 
 async fn get_collection(state: Arc<Mutex<Service>>) -> Vec<ArtistData> {
